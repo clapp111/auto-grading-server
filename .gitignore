@@ -1,0 +1,33 @@
+# 환경변수 (민감 정보)
+.env
+.env.prod
+.env.dev
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Alembic 자동생성 버전 파일은 커밋 O (아래 줄 주석 처리 유지)
+# alembic/versions/
+
+# 로컬 파일 업로드 경로
+uploads/
+docs/
+pages/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

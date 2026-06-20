@@ -1,0 +1,47 @@
+name: auto-grading-dev
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:dev
+    restart: always
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env.dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}:dev
+    restart: always
+    env_file:
+      - .env.dev
+    command: celery -A app.workers.tasks worker --loglevel=info --concurrency 1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    restart: always
+    env_file:
+      - .env.dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+volumes:
+  postgres_dev_data:

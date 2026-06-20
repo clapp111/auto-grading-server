@@ -1,0 +1,11 @@
+.env
+.git
+.gitignore
+.github
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+tests/
+hifi-pages/
+docs/

@@ -1,0 +1,27 @@
+from datetime import datetime
+
+from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+from app.enums.exam_status import ExamStatus
+
+
+class Exam(Base):
+    __tablename__ = "exam"
+
+    exam_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id"), nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    problem_sheet_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_answer_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[ExamStatus] = mapped_column(SAEnum(ExamStatus), nullable=False, default=ExamStatus.DRAFT)
+    student_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+    member: Mapped["Member"] = relationship(back_populates="exams")
+    problems: Mapped[list["Problem"]] = relationship(back_populates="exam")
+    students: Mapped[list["Student"]] = relationship(back_populates="exam")
+    answer_sheets: Mapped[list["AnswerSheet"]] = relationship(back_populates="exam")
+    jobs: Mapped[list["Job"]] = relationship(back_populates="exam")

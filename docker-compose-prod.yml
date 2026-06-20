@@ -1,0 +1,47 @@
+name: auto-grading-prod
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    restart: always
+    env_file:
+      - .env.prod
+    command: celery -A app.workers.tasks worker --loglevel=info --concurrency 2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    restart: always
+    env_file:
+      - .env.prod
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+volumes:
+  postgres_prod_data:
