@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import JobNotFoundError
 from app.db.session import get_db
-from app.repositories.job_repository import JobRepository
+from app.repositories.job import JobRepository
 from app.schemas.job import JobResponse
 
 

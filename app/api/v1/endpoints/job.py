@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.schemas.common import ApiResponse
 from app.schemas.job import JobResponse
-from app.services.job_service import JobService, get_job_service
+from app.services.job import JobService, get_job_service
 
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])

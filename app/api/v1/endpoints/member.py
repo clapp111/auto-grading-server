@@ -4,7 +4,7 @@ from app.core.security import get_current_member
 from app.models.member import Member
 from app.schemas.common import ApiResponse
 from app.schemas.member import MemberResponse
-from app.services.member_service import MemberService, get_member_service
+from app.services.member import MemberService, get_member_service
 
 router = APIRouter(prefix="/members", tags=["members"])
 

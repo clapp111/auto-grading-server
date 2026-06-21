@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.enums.role import Role
 from app.infrastructure.storage.url import get_file_url
 from app.models.member import Member
-from app.repositories.member_repository import MemberRepository
+from app.repositories.member import MemberRepository
 from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse
 from app.schemas.member import MemberResponse
 

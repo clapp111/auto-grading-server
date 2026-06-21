@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse
 from app.schemas.common import ApiResponse
-from app.services.auth_service import AuthService, get_auth_service
+from app.services.auth import AuthService, get_auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
