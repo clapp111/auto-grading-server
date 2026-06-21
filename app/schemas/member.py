@@ -10,6 +10,6 @@ class MemberResponse(BaseModel):
     affiliation: str | None
     affiliation_role: AffiliationRole
     role: Role
-    profile_url: str | None
+    profile_url: str | None = None
 
     model_config = {"from_attributes": True}

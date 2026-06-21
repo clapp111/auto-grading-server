@@ -8,3 +8,7 @@ class InvalidCredentialsError(Exception):
 
 class UnauthorizedException(Exception):
     pass
+
+
+class JobNotFoundError(Exception):
+    pass

@@ -37,13 +37,8 @@ class AuthService:
 
     def _to_token_response(self, member: Member) -> TokenResponse:
         token = create_access_token({"sub": str(member.member_id)})
-        member_response = MemberResponse(
-            member_id=member.member_id,
-            email=member.email,
-            profile_url=get_file_url(member.profile_key),
-            affiliation=member.affiliation,
-            affiliation_role=member.affiliation_role,
-            role=member.role,
+        member_response = MemberResponse.model_validate(member).model_copy(
+            update={"profile_url": get_file_url(member.profile_key)}
         )
         return TokenResponse(access_token=token, member=member_response)
 
