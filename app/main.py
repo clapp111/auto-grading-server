@@ -5,6 +5,7 @@ import app.db.models
 from app.api.v1.router import api_router
 from app.core.exceptions import (
     EmailAlreadyExistsError,
+    ExamNotFoundError,
     InvalidCredentialsError,
     JobNotFoundError,
     UnauthorizedException,
@@ -39,6 +40,14 @@ async def unauthorized_handler(request: Request, exc: UnauthorizedException) -> 
     return JSONResponse(
         status_code=401,
         content={"data": None, "meta": None, "error": {"code": "UNAUTHORIZED", "message": "인증이 필요합니다."}},
+    )
+
+
+@app.exception_handler(ExamNotFoundError)
+async def exam_not_found_handler(request: Request, exc: ExamNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "EXAM_NOT_FOUND", "message": "시험을 찾을 수 없습니다."}},
     )
 
 

@@ -19,6 +19,7 @@ class Exam(Base):
     status: Mapped[ExamStatus] = mapped_column(SAEnum(ExamStatus), nullable=False, default=ExamStatus.DRAFT)
     student_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, onupdate=func.now())
 
     member: Mapped["Member"] = relationship(back_populates="exams")
     problems: Mapped[list["Problem"]] = relationship(back_populates="exam")

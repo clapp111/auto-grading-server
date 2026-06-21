@@ -12,3 +12,7 @@ class UnauthorizedException(Exception):
 
 class JobNotFoundError(Exception):
     pass
+
+
+class ExamNotFoundError(Exception):
+    pass

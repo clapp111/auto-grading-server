@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -64,5 +64,5 @@ class ApiError(BaseModel):
 
 class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = None
-    meta: Optional[PageMeta | SliceMeta | OffsetMeta | CursorMeta] = None
+    meta: Optional[Any] = None
     error: Optional[ApiError] = None
