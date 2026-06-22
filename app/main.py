@@ -8,6 +8,8 @@ from app.core.exceptions import (
     ExamNotFoundError,
     InvalidCredentialsError,
     JobNotFoundError,
+    ModelAnswerNotFoundError,
+    ProblemNotFoundError,
     UnauthorizedException,
 )
 
@@ -56,6 +58,22 @@ async def job_not_found_handler(request: Request, exc: JobNotFoundError) -> JSON
     return JSONResponse(
         status_code=404,
         content={"data": None, "meta": None, "error": {"code": "JOB_NOT_FOUND", "message": "작업을 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(ProblemNotFoundError)
+async def problem_not_found_handler(request: Request, exc: ProblemNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "PROBLEM_NOT_FOUND", "message": "문제를 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(ModelAnswerNotFoundError)
+async def model_answer_not_found_handler(request: Request, exc: ModelAnswerNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "MODEL_ANSWER_NOT_FOUND", "message": "모범답안을 찾을 수 없습니다."}},
     )
 
 

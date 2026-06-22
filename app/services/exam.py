@@ -5,7 +5,7 @@ from app.core.exceptions import ExamNotFoundError
 from app.db.session import get_db
 from app.enums.exam_status import ExamStatus
 from app.repositories.exam import ExamRepository
-from app.schemas.exam import ExamCreate, ExamCursorMeta, ExamResponse, ExamUpdate
+from app.schemas.exam import ExamCreateRequest, ExamCursorMeta, ExamResponse, ExamUpdateRequest
 
 
 class ExamService:
@@ -37,7 +37,7 @@ class ExamService:
         )
         return [ExamResponse.model_validate(e) for e in items], meta
 
-    def create_exam(self, member_id: int, request: ExamCreate) -> ExamResponse:
+    def create_exam(self, member_id: int, request: ExamCreateRequest) -> ExamResponse:
         exam = self.repo.create(
             member_id=member_id,
             name=request.name,
@@ -51,7 +51,7 @@ class ExamService:
             raise ExamNotFoundError()
         return ExamResponse.model_validate(exam)
 
-    def update_exam(self, exam_id: int, member_id: int, request: ExamUpdate) -> ExamResponse:
+    def update_exam(self, exam_id: int, member_id: int, request: ExamUpdateRequest) -> ExamResponse:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()

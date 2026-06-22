@@ -7,6 +7,11 @@ from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
 
 
+class JobStartedResponse(BaseModel):
+    job_id: int
+    status: JobStatus
+
+
 class JobResponse(BaseModel):
     job_id: int
     exam_id: int

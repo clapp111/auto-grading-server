@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.rubric_source import RubricSource
+
+if TYPE_CHECKING:
+    from app.models.problem import Problem
 
 
 class Rubric(Base):

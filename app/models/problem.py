@@ -1,9 +1,18 @@
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import TYPE_CHECKING
 
 from app.db.base import Base
 from app.enums.problem_type import ProblemType
 from app.enums.programming_language import ProgrammingLanguage
+
+if TYPE_CHECKING:
+    from app.models.exam import Exam
+    from app.models.model_answer import ModelAnswer
+    from app.models.rubric import Rubric
+    from app.models.answer_region import AnswerRegion
+    from app.models.grade import Grade
+    from app.models.job import Job
 
 
 class Problem(Base):
@@ -11,8 +20,7 @@ class Problem(Base):
 
     problem_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    label: Mapped[str | None] = mapped_column(String, nullable=True)
+    label: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[ProblemType] = mapped_column(SAEnum(ProblemType), nullable=False)
     max_score: Mapped[int] = mapped_column(Integer, nullable=False)
     region: Mapped[dict | None] = mapped_column(JSON, nullable=True)

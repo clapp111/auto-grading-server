@@ -12,12 +12,12 @@ class ExamCursorMeta(CursorMeta):
     done: int
 
 
-class ExamCreate(BaseModel):
+class ExamCreateRequest(BaseModel):
     name: str = Field(max_length=200)
     description: str | None = Field(default=None, max_length=200)
 
 
-class ExamUpdate(BaseModel):
+class ExamUpdateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=200)
 

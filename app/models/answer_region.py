@@ -1,9 +1,16 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.layout_mode import LayoutMode
 from app.enums.region_shape import RegionShape
+
+if TYPE_CHECKING:
+    from app.models.answer_sheet import AnswerSheet
+    from app.models.problem import Problem
+    from app.models.ocr_result import OCRResult
 
 
 class AnswerRegion(Base):

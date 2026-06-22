@@ -22,6 +22,7 @@ build/
 uploads/
 docs/
 pages/
+uploads/
 
 # IDE
 .idea/

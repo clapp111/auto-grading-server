@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, String, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.affiliation_role import AffiliationRole
 from app.enums.role import Role
+
+if TYPE_CHECKING:
+    from app.models.exam import Exam
 
 
 class Member(Base):

@@ -1,8 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.sheet_status import SheetStatus
+
+if TYPE_CHECKING:
+    from app.models.exam import Exam
+    from app.models.student import Student
+    from app.models.answer_region import AnswerRegion
 
 
 class AnswerSheet(Base):

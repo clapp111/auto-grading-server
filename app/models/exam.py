@@ -1,10 +1,19 @@
 from datetime import datetime
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.exam_status import ExamStatus
+
+if TYPE_CHECKING:
+    from app.models.member import Member
+    from app.models.problem import Problem
+    from app.models.student import Student
+    from app.models.answer_sheet import AnswerSheet
+    from app.models.job import Job
 
 
 class Exam(Base):

@@ -5,7 +5,7 @@ from app.core.security import get_current_member
 from app.enums.exam_status import ExamStatus
 from app.models.member import Member
 from app.schemas.common import ApiResponse, CursorMeta
-from app.schemas.exam import ExamCreate, ExamResponse, ExamUpdate
+from app.schemas.exam import ExamCreateRequest, ExamResponse, ExamUpdateRequest
 from app.services.exam import ExamService, get_exam_service
 
 router = APIRouter(prefix="/exams", tags=["exams"])
@@ -26,7 +26,7 @@ async def list_exams(
 
 @router.post("", status_code=201, response_model=ApiResponse[ExamResponse])
 async def create_exam(
-    request: ExamCreate,
+    request: ExamCreateRequest,
     current_member: Member = Depends(get_current_member),
     service: ExamService = Depends(get_exam_service),
 ) -> ApiResponse[ExamResponse]:
@@ -45,7 +45,7 @@ async def get_exam(
 @router.patch("/{exam_id}", response_model=ApiResponse[ExamResponse])
 async def update_exam(
     exam_id: int,
-    request: ExamUpdate,
+    request: ExamUpdateRequest,
     current_member: Member = Depends(get_current_member),
     service: ExamService = Depends(get_exam_service),
 ) -> ApiResponse[ExamResponse]:

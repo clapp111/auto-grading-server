@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.grade_method import GradeMethod
 from app.enums.grade_status import GradeStatus
+
+if TYPE_CHECKING:
+    from app.models.problem import Problem
+    from app.models.student import Student
 
 
 class Grade(Base):
