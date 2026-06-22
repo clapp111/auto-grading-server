@@ -2,6 +2,7 @@ import requests
 from datetime import datetime
 
 from app.workers.tasks import celery_app
+from app.workers.utils import _build_progress
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -22,6 +23,7 @@ def run_model_answer_ocr(self, job_id: int):
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()
         job.celery_task_id = self.request.id
+        job.progress_json = _build_progress(0, 1, "OCR", "모범답안 OCR을 시작합니다.")
         db.commit()
 
         problem = job.problem
@@ -43,6 +45,7 @@ def run_model_answer_ocr(self, job_id: int):
         extracted_text = ocr_client.recognize(image_bytes)
 
         model_answer.model_answer_text = extracted_text
+        job.progress_json = _build_progress(1, 1, "DONE", "모범답안 OCR이 완료되었습니다.")
         job.status = JobStatus.DONE
         job.completed_at = datetime.utcnow()
         job.result_json = {
@@ -56,6 +59,7 @@ def run_model_answer_ocr(self, job_id: int):
 
     except Exception as e:
         job.status = JobStatus.FAILED
+        job.progress_json = _build_progress(0, 0, "FAILED", "모범답안 OCR에 실패했습니다.")
         job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
         db.commit()
 
@@ -68,7 +72,14 @@ def run_student_id_ocr(self, job_id: int):
     import app.db.models  # noqa: F401
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
+    from app.enums.sheet_status import SheetStatus
+    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.pdf.renderer import crop_region
+    from app.infrastructure.storage.deps import get_storage
+    from app.models.answer_sheet import AnswerSheet
     from app.models.job import Job
+    from app.models.student import Student
+    from app.schemas.common import Region
 
     db = SessionLocal()
     job = db.get(Job, job_id)
@@ -76,32 +87,130 @@ def run_student_id_ocr(self, job_id: int):
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()
         job.celery_task_id = self.request.id
+        job.progress_json = _build_progress(0, 0, "PREPARING", "학생 식별 OCR을 준비 중입니다.")
         db.commit()
 
-        # TODO: 학생 식별 OCR 구현
-        # exam = job.exam
-        # name_region = Region(**exam.student_name_region)
-        # no_region = Region(**exam.student_no_region)
-        # sheets = db.query(AnswerSheet).filter(...UNMATCHED).all()
-        # for sheet in sheets:
-        #     pdf_bytes = storage.download(sheet.file_key)
-        #     name_img = crop_region(pdf_bytes, ...)
-        #     ocr_name = ocr_client.recognize(name_img)
-        #     ocr_no   = ocr_client.recognize(no_img)
-        #     student  = find_or_create_student(db, exam.exam_id, ocr_name, ocr_no)
-        #     sheet.student_id = student.student_id
-        #     sheet.status = SheetStatus.MATCHED
-        # db.commit()
+        exam = job.exam
+        if not exam.student_name_region or not exam.student_no_region:
+            raise ValueError("학생 식별 영역이 지정되지 않았습니다.")
 
-        job.status = JobStatus.DONE
+        name_region = Region(**exam.student_name_region)
+        no_region = Region(**exam.student_no_region)
+        sheets = (
+            db.query(AnswerSheet)
+            .filter(
+                AnswerSheet.exam_id == exam.exam_id,
+                AnswerSheet.status == SheetStatus.UNMATCHED,
+            )
+            .order_by(AnswerSheet.answer_sheet_id)
+            .all()
+        )
+
+        total = len(sheets)
+        storage = get_storage()
+        ocr_client = ClovaOcrClient()
+        matched = 0
+        failed = 0
+        failed_targets: list[dict] = []
+
+        job.progress_json = _build_progress(0, total, "OCR", "학생 식별 OCR을 시작합니다.")
+        db.commit()
+
+        for index, sheet in enumerate(sheets, start=1):
+            pdf_bytes = storage.download(sheet.file_key)
+            name_img = crop_region(pdf_bytes, name_region.page, name_region.x, name_region.y, name_region.w, name_region.h)
+            no_img = crop_region(pdf_bytes, no_region.page, no_region.x, no_region.y, no_region.w, no_region.h)
+
+            ocr_name = _normalize_name(ocr_client.recognize(name_img))
+            ocr_no = _normalize_student_no(ocr_client.recognize(no_img))
+
+            if not ocr_no:
+                failed += 1
+                failed_targets.append(
+                    {
+                        "answerSheetId": sheet.answer_sheet_id,
+                        "reason": "STUDENT_NO_EMPTY",
+                        "ocrName": ocr_name,
+                    }
+                )
+            else:
+                student = (
+                    db.query(Student)
+                    .filter(Student.exam_id == exam.exam_id, Student.student_no == ocr_no)
+                    .first()
+                )
+
+                if student is None:
+                    student = Student(
+                        exam_id=exam.exam_id,
+                        name=ocr_name or ocr_no,
+                        student_no=ocr_no,
+                    )
+                    db.add(student)
+                    db.flush()
+                elif ocr_name and student.name != ocr_name:
+                    student.name = ocr_name
+
+                sheet.student_id = student.student_id
+                sheet.status = SheetStatus.MATCHED
+                matched += 1
+
+            job.progress_json = _build_progress(index, total, "OCR", f"{index}/{total} 답안지의 학생 정보를 인식 중입니다.")
+            db.commit()
+
+        exam.student_count = (
+            db.query(Student)
+            .filter(Student.exam_id == exam.exam_id)
+            .count()
+        )
+
         job.completed_at = datetime.utcnow()
-        job.result_json = {"summary": {"processed": 0, "succeeded": 0, "failed": 0}}
+        job.result_json = {
+            "summary": {"processed": total, "succeeded": matched, "failed": failed},
+            "resultRef": {"type": "answer_sheets", "examId": exam.exam_id},
+            "warnings": [
+                {
+                    "code": "UNMATCHED_STUDENT_ID",
+                    "message": "일부 답안지에서 학번 인식에 실패했습니다.",
+                }
+            ] if failed_targets else [],
+        }
+        if failed_targets:
+            job.status = JobStatus.FAILED
+            job.progress_json = _build_progress(total, total, "FAILED", "일부 답안지의 학생 식별에 실패했습니다.")
+            job.error_json = {
+                "code": "PARTIAL_STUDENT_ID_RECOGNITION_FAILED",
+                "message": "일부 답안지의 학생 식별에 실패했습니다.",
+                "retryable": False,
+                "category": "validation",
+                "failedTargets": failed_targets,
+            }
+        else:
+            job.status = JobStatus.DONE
+            job.progress_json = _build_progress(total, total, "DONE", "학생 식별 OCR이 완료되었습니다.")
         db.commit()
+
+    except requests.exceptions.RequestException as e:
+        raise self.retry(exc=e, countdown=2 ** self.request.retries)
 
     except Exception as e:
         job.status = JobStatus.FAILED
-        job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
+        job.progress_json = _build_progress(0, 0, "FAILED", "학생 식별 OCR에 실패했습니다.")
+        job.error_json = {
+            "code": "INTERNAL",
+            "message": str(e),
+            "retryable": False,
+            "category": "internal",
+        }
         db.commit()
 
     finally:
         db.close()
+
+
+def _normalize_name(raw: str) -> str:
+    return " ".join(raw.split()).strip()
+
+
+def _normalize_student_no(raw: str) -> str:
+    return "".join(ch for ch in raw if ch.isdigit())

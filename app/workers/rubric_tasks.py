@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.workers.tasks import celery_app
+from app.workers.utils import _build_progress
 
 _PROBLEM_TYPE_LABELS = {
     "MULTIPLE_CHOICE": "객관식",
@@ -27,6 +28,7 @@ def suggest_rubric_task(self, job_id: int):
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()
         job.celery_task_id = self.request.id
+        job.progress_json = _build_progress(0, 3, "PREPARING", "루브릭 추천을 준비 중입니다.")
         db.commit()
 
         problem = job.problem
@@ -39,6 +41,9 @@ def suggest_rubric_task(self, job_id: int):
         if not model_answer or not model_answer.model_answer_text:
             raise ValueError("모범답안 텍스트가 없습니다. 먼저 모범답안 OCR을 실행해주세요.")
 
+        job.progress_json = _build_progress(1, 3, "ANALYZING", "문제와 모범답안을 분석 중입니다.")
+        db.commit()
+
         criteria = _call_claude_for_rubric(
             api_key=settings.ANTHROPIC_API_KEY,
             label=problem.label,
@@ -47,7 +52,10 @@ def suggest_rubric_task(self, job_id: int):
             model_answer_text=model_answer.model_answer_text,
         )
 
-        # 기존 LLM 추천 기준만 교체 (사용자가 직접 입력한 HUMAN 기준은 유지)
+        job.progress_json = _build_progress(2, 3, "SAVING", "추천 루브릭을 저장하는 중입니다.")
+        db.commit()
+
+        # 기존 LLM 추천 기준만 교체한다. 사람이 직접 입력한 HUMAN 기준은 유지한다.
         db.query(Rubric).filter(
             Rubric.problem_id == problem.problem_id,
             Rubric.source == RubricSource.LLM,
@@ -65,6 +73,7 @@ def suggest_rubric_task(self, job_id: int):
         ]
         db.add_all(rubrics)
 
+        job.progress_json = _build_progress(3, 3, "DONE", "루브릭 추천이 완료되었습니다.")
         job.status = JobStatus.DONE
         job.completed_at = datetime.utcnow()
         job.result_json = {
@@ -75,6 +84,7 @@ def suggest_rubric_task(self, job_id: int):
 
     except Exception as e:
         job.status = JobStatus.FAILED
+        job.progress_json = _build_progress(0, 0, "FAILED", "루브릭 추천에 실패했습니다.")
         job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
         db.commit()
 
@@ -91,7 +101,7 @@ _RUBRIC_JSON_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string", "description": "채점 기준 내용 (한국어)"},
+                    "text": {"type": "string", "description": "채점 기준 내용"},
                     "allocated_score": {"type": "integer", "description": "해당 기준 배점"},
                 },
                 "required": ["text", "allocated_score"],
@@ -117,19 +127,18 @@ def _call_claude_for_rubric(
     client = anthropic.Anthropic(api_key=api_key)
     type_label = _PROBLEM_TYPE_LABELS.get(problem_type, problem_type)
 
-    prompt = f"""아래 문제와 모범답안을 분석하여 채점 루브릭 기준을 생성해주세요.
+    prompt = f"""아래 문제와 모범답안을 분석하여 채점 루브릭 기준들을 생성해주세요.
 
 문제 번호: {label}
 문제 유형: {type_label}
 총 배점: {max_score}점
-
 모범답안:
 {model_answer_text}
 
 조건:
 - 모든 기준의 allocated_score 합계가 정확히 {max_score}점이어야 합니다.
-- 각 기준은 충족 여부를 명확히 판단할 수 있는 단일 요소를 다루세요.
-- 한국어로 작성하세요."""
+- 각 기준은 충족 여부를 명확히 판단할 수 있는 단위 요소를 써주세요.
+- 한국어로 작성해주세요."""
 
     with client.messages.stream(
         model="claude-sonnet-4-6",

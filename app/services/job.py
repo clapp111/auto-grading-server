@@ -11,9 +11,9 @@ class JobService:
     def __init__(self, repo: JobRepository):
         self.repo = repo
 
-    def get_job(self, job_id: int) -> JobResponse:
+    def get_job(self, job_id: int, member_id: int) -> JobResponse:
         job = self.repo.get_by_id(job_id)
-        if not job:
+        if not job or job.exam.member_id != member_id:
             raise JobNotFoundError()
         return JobResponse.model_validate(job)
 
