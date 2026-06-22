@@ -11,3 +11,5 @@ class ExamNotFoundError(Exception): pass
 class ProblemNotFoundError(Exception): pass
 
 class ModelAnswerNotFoundError(Exception): pass
+
+class RubricNotFoundError(Exception): pass

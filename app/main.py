@@ -10,6 +10,7 @@ from app.core.exceptions import (
     JobNotFoundError,
     ModelAnswerNotFoundError,
     ProblemNotFoundError,
+    RubricNotFoundError,
     UnauthorizedException,
 )
 
@@ -74,6 +75,14 @@ async def model_answer_not_found_handler(request: Request, exc: ModelAnswerNotFo
     return JSONResponse(
         status_code=404,
         content={"data": None, "meta": None, "error": {"code": "MODEL_ANSWER_NOT_FOUND", "message": "모범답안을 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(RubricNotFoundError)
+async def rubric_not_found_handler(request: Request, exc: RubricNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "RUBRIC_NOT_FOUND", "message": "루브릭 기준을 찾을 수 없습니다."}},
     )
 
 

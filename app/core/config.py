@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     CLOVA_OCR_INVOKE_URL: str = ""
     CLOVA_OCR_SECRET_KEY: str = ""
 
+    ANTHROPIC_API_KEY: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
