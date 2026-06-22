@@ -1,0 +1,144 @@
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import AnswerSheetNotFoundError, ExamNotFoundError
+from app.db.session import get_db
+from app.enums.job_type import JobType
+from app.enums.sheet_status import SheetStatus
+from app.infrastructure.storage.base import StorageClient
+from app.infrastructure.storage.deps import get_storage
+from app.infrastructure.storage.url import get_file_url
+from app.models.answer_sheet import AnswerSheet
+from app.repositories.answer_sheet import AnswerSheetRepository
+from app.repositories.exam import ExamRepository
+from app.repositories.job import JobRepository
+from app.repositories.student import StudentRepository
+from app.schemas.answer_sheet import (
+    AnswerSheetDownloadResponse,
+    AnswerSheetPatchRequest,
+    AnswerSheetResponse,
+    IdRegionSaveRequest,
+)
+from app.schemas.job import JobStartedResponse
+from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
+
+
+class AnswerSheetService:
+    def __init__(
+        self,
+        answer_sheet_repo: AnswerSheetRepository,
+        student_repo: StudentRepository,
+        exam_repo: ExamRepository,
+        job_repo: JobRepository,
+        storage: StorageClient,
+    ):
+        self.answer_sheet_repo = answer_sheet_repo
+        self.student_repo = student_repo
+        self.exam_repo = exam_repo
+        self.job_repo = job_repo
+        self.storage = storage
+
+    def _get_exam_or_raise(self, exam_id: int, member_id: int):
+        exam = self.exam_repo.get_by_id(exam_id)
+        if not exam or exam.member_id != member_id:
+            raise ExamNotFoundError()
+        return exam
+
+    def _get_sheet_or_raise(self, answer_sheet_id: int, member_id: int) -> AnswerSheet:
+        sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
+        if not sheet:
+            raise AnswerSheetNotFoundError()
+        exam = self.exam_repo.get_by_id(sheet.exam_id)
+        if not exam or exam.member_id != member_id:
+            raise AnswerSheetNotFoundError()
+        return sheet
+
+    def issue_upload_url(self, exam_id: int, member_id: int, request: PresignedUrlRequest) -> PresignedUrlResponse:
+        self._get_exam_or_raise(exam_id, member_id)
+        file_key = self.storage.generate_key(f"exams/{exam_id}/answer-sheets", request.file_name)
+        self.answer_sheet_repo.create(exam_id=exam_id, file_key=file_key)
+        upload_url = self.storage.generate_presigned_url(file_key, request.content_type)
+        return PresignedUrlResponse(upload_url=upload_url, file_key=file_key)
+
+    def list_answer_sheets(self, exam_id: int, member_id: int) -> list[AnswerSheetResponse]:
+        self._get_exam_or_raise(exam_id, member_id)
+        sheets = self.answer_sheet_repo.list_by_exam(exam_id)
+        return [_to_response(s) for s in sheets]
+
+    def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
+        sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
+        self.answer_sheet_repo.delete(sheet)
+
+    def get_download_url(self, answer_sheet_id: int, member_id: int) -> AnswerSheetDownloadResponse:
+        sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
+        exam = self.exam_repo.get_by_id(sheet.exam_id)
+        return AnswerSheetDownloadResponse(
+            url=get_file_url(sheet.file_key),
+            student_name_region=exam.student_name_region,
+            student_no_region=exam.student_no_region,
+        )
+
+    def save_id_regions(self, exam_id: int, member_id: int, request: IdRegionSaveRequest) -> JobStartedResponse:
+        from app.workers.ocr_tasks import run_student_id_ocr
+
+        exam = self._get_exam_or_raise(exam_id, member_id)
+        self.exam_repo.update(
+            exam,
+            student_name_region=request.name_region.model_dump(),
+            student_no_region=request.student_no_region.model_dump(),
+        )
+        job = self.job_repo.create(
+            exam_id=exam_id,
+            type=JobType.ANSWER_SHEET_RECOGNIZE,
+            requested_by_member_id=member_id,
+            input_json={
+                "scope": {"examId": exam_id},
+                "source": {"trigger": "api", "endpoint": f"/api/v1/exams/{exam_id}/id-regions"},
+            },
+        )
+        run_student_id_ocr.delay(job.job_id)
+        return JobStartedResponse(job_id=job.job_id, status=job.status)
+
+    def patch_answer_sheet(self, answer_sheet_id: int, member_id: int, request: AnswerSheetPatchRequest) -> AnswerSheetResponse:
+        sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
+
+        if request.student_no:
+            student = self.student_repo.get_by_exam_and_no(sheet.exam_id, request.student_no)
+            if student:
+                if request.name:
+                    self.student_repo.update(student, name=request.name)
+            else:
+                student = self.student_repo.create(
+                    exam_id=sheet.exam_id,
+                    name=request.name or "",
+                    student_no=request.student_no,
+                )
+            self.answer_sheet_repo.update(sheet, student_id=student.student_id, status=SheetStatus.MATCHED)
+
+        sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
+        return _to_response(sheet)
+
+
+def _to_response(sheet: AnswerSheet) -> AnswerSheetResponse:
+    return AnswerSheetResponse(
+        answer_sheet_id=sheet.answer_sheet_id,
+        exam_id=sheet.exam_id,
+        file_key=sheet.file_key,
+        status=sheet.status,
+        student_id=sheet.student_id,
+        student_name=sheet.student.name if sheet.student else None,
+        student_no=sheet.student.student_no if sheet.student else None,
+    )
+
+
+def get_answer_sheet_service(
+    db: Session = Depends(get_db),
+    storage: StorageClient = Depends(get_storage),
+) -> AnswerSheetService:
+    return AnswerSheetService(
+        AnswerSheetRepository(db),
+        StudentRepository(db),
+        ExamRepository(db),
+        JobRepository(db),
+        storage,
+    )

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Index, Integer, String, text
+from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -24,7 +24,6 @@ class AnswerSheet(Base):
     exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
     student_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("student.student_id"), nullable=True)
     file_key: Mapped[str] = mapped_column(String, nullable=False)
-    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[SheetStatus] = mapped_column(SAEnum(SheetStatus), nullable=False, default=SheetStatus.UNMATCHED)
 
     exam: Mapped["Exam"] = relationship(back_populates="answer_sheets")

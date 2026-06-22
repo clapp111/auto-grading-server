@@ -13,3 +13,5 @@ class ProblemNotFoundError(Exception): pass
 class ModelAnswerNotFoundError(Exception): pass
 
 class RubricNotFoundError(Exception): pass
+
+class AnswerSheetNotFoundError(Exception): pass

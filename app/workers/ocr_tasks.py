@@ -61,3 +61,47 @@ def run_model_answer_ocr(self, job_id: int):
 
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, max_retries=3)
+def run_student_id_ocr(self, job_id: int):
+    import app.db.models  # noqa: F401
+    from app.db.session import SessionLocal
+    from app.enums.job_status import JobStatus
+    from app.models.job import Job
+
+    db = SessionLocal()
+    job = db.get(Job, job_id)
+    try:
+        job.status = JobStatus.RUNNING
+        job.started_at = datetime.utcnow()
+        job.celery_task_id = self.request.id
+        db.commit()
+
+        # TODO: 학생 식별 OCR 구현
+        # exam = job.exam
+        # name_region = Region(**exam.student_name_region)
+        # no_region = Region(**exam.student_no_region)
+        # sheets = db.query(AnswerSheet).filter(...UNMATCHED).all()
+        # for sheet in sheets:
+        #     pdf_bytes = storage.download(sheet.file_key)
+        #     name_img = crop_region(pdf_bytes, ...)
+        #     ocr_name = ocr_client.recognize(name_img)
+        #     ocr_no   = ocr_client.recognize(no_img)
+        #     student  = find_or_create_student(db, exam.exam_id, ocr_name, ocr_no)
+        #     sheet.student_id = student.student_id
+        #     sheet.status = SheetStatus.MATCHED
+        # db.commit()
+
+        job.status = JobStatus.DONE
+        job.completed_at = datetime.utcnow()
+        job.result_json = {"summary": {"processed": 0, "succeeded": 0, "failed": 0}}
+        db.commit()
+
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
+        db.commit()
+
+    finally:
+        db.close()

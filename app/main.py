@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import app.db.models
 from app.api.v1.router import api_router
 from app.core.exceptions import (
+    AnswerSheetNotFoundError,
     EmailAlreadyExistsError,
     ExamNotFoundError,
     InvalidCredentialsError,
@@ -83,6 +84,14 @@ async def rubric_not_found_handler(request: Request, exc: RubricNotFoundError) -
     return JSONResponse(
         status_code=404,
         content={"data": None, "meta": None, "error": {"code": "RUBRIC_NOT_FOUND", "message": "루브릭 기준을 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(AnswerSheetNotFoundError)
+async def answer_sheet_not_found_handler(request: Request, exc: AnswerSheetNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "ANSWER_SHEET_NOT_FOUND", "message": "답안지를 찾을 수 없습니다."}},
     )
 
 
