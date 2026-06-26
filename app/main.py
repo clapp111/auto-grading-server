@@ -4,14 +4,18 @@ from fastapi.responses import JSONResponse
 import app.db.models
 from app.api.v1.router import api_router
 from app.core.exceptions import (
+    AnswerRegionNotFoundError,
     AnswerSheetNotFoundError,
     EmailAlreadyExistsError,
     ExamNotFoundError,
+    GradeNotFoundError,
     InvalidCredentialsError,
     JobNotFoundError,
     ModelAnswerNotFoundError,
+    OcrResultNotFoundError,
     ProblemNotFoundError,
     RubricNotFoundError,
+    StudentNotFoundError,
     UnauthorizedException,
 )
 
@@ -92,6 +96,38 @@ async def answer_sheet_not_found_handler(request: Request, exc: AnswerSheetNotFo
     return JSONResponse(
         status_code=404,
         content={"data": None, "meta": None, "error": {"code": "ANSWER_SHEET_NOT_FOUND", "message": "답안지를 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(AnswerRegionNotFoundError)
+async def answer_region_not_found_handler(request: Request, exc: AnswerRegionNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "ANSWER_REGION_NOT_FOUND", "message": "답안 영역을 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(OcrResultNotFoundError)
+async def ocr_result_not_found_handler(request: Request, exc: OcrResultNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "OCR_RESULT_NOT_FOUND", "message": "OCR 결과를 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(StudentNotFoundError)
+async def student_not_found_handler(request: Request, exc: StudentNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "STUDENT_NOT_FOUND", "message": "학생을 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(GradeNotFoundError)
+async def grade_not_found_handler(request: Request, exc: GradeNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"data": None, "meta": None, "error": {"code": "GRADE_NOT_FOUND", "message": "채점 결과를 찾을 수 없습니다."}},
     )
 
 

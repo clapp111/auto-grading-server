@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.workers.tasks import celery_app
 from app.workers.utils import _build_progress
@@ -26,7 +26,7 @@ def suggest_rubric_task(self, job_id: int):
     job = db.get(Job, job_id)
     try:
         job.status = JobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
         job.progress_json = _build_progress(0, 3, "PREPARING", "루브릭 추천을 준비 중입니다.")
         db.commit()
@@ -75,7 +75,7 @@ def suggest_rubric_task(self, job_id: int):
 
         job.progress_json = _build_progress(3, 3, "DONE", "루브릭 추천이 완료되었습니다.")
         job.status = JobStatus.DONE
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
             "summary": {"generated": len(rubrics)},
             "resultRef": {"type": "rubric", "problemId": problem.problem_id},

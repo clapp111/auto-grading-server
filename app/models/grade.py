@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, JSON, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -23,6 +23,7 @@ class Grade(Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[GradeStatus] = mapped_column(SAEnum(GradeStatus), nullable=False, default=GradeStatus.SUGGESTED)
     method: Mapped[GradeMethod] = mapped_column(SAEnum(GradeMethod), nullable=False)
+    rubric_breakdown: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     problem: Mapped["Problem"] = relationship(back_populates="grades")
     student: Mapped["Student"] = relationship(back_populates="grades")

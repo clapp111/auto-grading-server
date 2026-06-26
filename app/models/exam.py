@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.enums.exam_status import ExamStatus
+from app.enums.layout_mode import LayoutMode
 
 if TYPE_CHECKING:
     from app.models.member import Member
@@ -26,6 +27,7 @@ class Exam(Base):
     problem_sheet_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
     model_answer_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[ExamStatus] = mapped_column(SAEnum(ExamStatus), nullable=False, default=ExamStatus.DRAFT)
+    layout_mode: Mapped[LayoutMode] = mapped_column(SAEnum(LayoutMode), nullable=False, default=LayoutMode.FIXED)
     student_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     student_name_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     student_no_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)

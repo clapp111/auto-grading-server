@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _build_progress(current: int, total: int, stage: str, message: str) -> dict:
@@ -9,5 +9,5 @@ def _build_progress(current: int, total: int, stage: str, message: str) -> dict:
         "percent": percent,
         "stage": stage,
         "message": message,
-        "lastUpdatedAt": datetime.utcnow().isoformat() + "Z",
+        "lastUpdatedAt": datetime.now(timezone.utc).isoformat(),
     }

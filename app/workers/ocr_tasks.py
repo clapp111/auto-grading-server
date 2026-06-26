@@ -1,5 +1,5 @@
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.workers.tasks import celery_app
 from app.workers.utils import _build_progress
@@ -21,7 +21,7 @@ def run_model_answer_ocr(self, job_id: int):
     job = db.get(Job, job_id)
     try:
         job.status = JobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
         job.progress_json = _build_progress(0, 1, "OCR", "모범답안 OCR을 시작합니다.")
         db.commit()
@@ -47,7 +47,7 @@ def run_model_answer_ocr(self, job_id: int):
         model_answer.model_answer_text = extracted_text
         job.progress_json = _build_progress(1, 1, "DONE", "모범답안 OCR이 완료되었습니다.")
         job.status = JobStatus.DONE
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
             "summary": {"processed": 1, "succeeded": 1, "failed": 0},
             "resultRef": {"type": "model_answer", "problemId": problem.problem_id},
@@ -85,7 +85,7 @@ def run_student_id_ocr(self, job_id: int):
     job = db.get(Job, job_id)
     try:
         job.status = JobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
         job.progress_json = _build_progress(0, 0, "PREPARING", "학생 식별 OCR을 준비 중입니다.")
         db.commit()
@@ -164,7 +164,7 @@ def run_student_id_ocr(self, job_id: int):
             .count()
         )
 
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
             "summary": {"processed": total, "succeeded": matched, "failed": failed},
             "resultRef": {"type": "answer_sheets", "examId": exam.exam_id},
@@ -208,9 +208,180 @@ def run_student_id_ocr(self, job_id: int):
         db.close()
 
 
+@celery_app.task(bind=True, max_retries=3)
+def run_answer_ocr(self, job_id: int):
+    import app.db.models  # noqa: F401
+    from app.db.session import SessionLocal
+    from app.enums.job_status import JobStatus
+    from app.enums.ocr_status import OCRStatus
+    from app.enums.problem_type import ProblemType
+    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.pdf.renderer import crop_region
+    from app.infrastructure.storage.deps import get_storage
+    from app.models.answer_region import AnswerRegion
+    from app.models.answer_sheet import AnswerSheet
+    from app.models.job import Job
+    from app.models.ocr_result import OCRResult
+    from app.schemas.common import Region
+
+    db = SessionLocal()
+    job = db.get(Job, job_id)
+    try:
+        job.status = JobStatus.RUNNING
+        job.started_at = datetime.now(timezone.utc)
+        job.celery_task_id = self.request.id
+        job.progress_json = _build_progress(0, 0, "PREPARING", "답안 OCR을 준비 중입니다.")
+        db.commit()
+
+        exam = job.exam
+        sheets = (
+            db.query(AnswerSheet)
+            .filter(
+                AnswerSheet.exam_id == exam.exam_id,
+                AnswerSheet.student_id.isnot(None),
+            )
+            .order_by(AnswerSheet.answer_sheet_id)
+            .all()
+        )
+
+        # (sheet, region) 쌍 목록 구성 — sheet 순서대로 묶여 있어 PDF 캐시 가능
+        from sqlalchemy.orm import selectinload
+
+        targets: list[tuple[AnswerSheet, AnswerRegion]] = []
+        for sheet in sheets:
+            regions = (
+                db.query(AnswerRegion)
+                .options(selectinload(AnswerRegion.problem))
+                .filter(AnswerRegion.answer_sheet_id == sheet.answer_sheet_id)
+                .all()
+            )
+            for region in regions:
+                targets.append((sheet, region))
+
+        total = len(targets)
+        if total == 0:
+            job.status = JobStatus.DONE
+            job.completed_at = datetime.now(timezone.utc)
+            job.progress_json = _build_progress(0, 0, "DONE", "처리할 답안 영역이 없습니다.")
+            job.result_json = {"summary": {"processed": 0, "succeeded": 0, "failed": 0}}
+            db.commit()
+            return
+
+        storage = get_storage()
+        ocr_client = ClovaOcrClient()
+        succeeded = 0
+        failed = 0
+        failed_targets: list[dict] = []
+
+        # 같은 sheet가 연속으로 나오므로 교체 시점에만 재다운로드
+        current_sheet_id: int | None = None
+        current_pdf_bytes: bytes | None = None
+
+        job.progress_json = _build_progress(0, total, "OCR", "답안 OCR을 시작합니다.")
+        db.commit()
+
+        for index, (sheet, region) in enumerate(targets, start=1):
+            try:
+                if sheet.answer_sheet_id != current_sheet_id:
+                    current_sheet_id = sheet.answer_sheet_id
+                    current_pdf_bytes = storage.download(sheet.file_key)
+
+                if not region.bbox_region:
+                    raise ValueError("bbox_region이 지정되지 않았습니다.")
+
+                r = Region(**region.bbox_region)
+                image_bytes = crop_region(current_pdf_bytes, r.page, r.x, r.y, r.w, r.h)
+                ocr_text = ocr_client.recognize(image_bytes)
+
+                if region.problem.type == ProblemType.MULTIPLE_CHOICE:
+                    marked_choice = _parse_marked_choice(ocr_text)
+                    text = None
+                else:
+                    marked_choice = None
+                    text = ocr_text
+
+                ocr_result = (
+                    db.query(OCRResult)
+                    .filter(OCRResult.answer_region_id == region.answer_region_id)
+                    .first()
+                )
+                if ocr_result:
+                    ocr_result.text = text
+                    ocr_result.marked_choice = marked_choice
+                    ocr_result.status = OCRStatus.RAW
+                else:
+                    db.add(OCRResult(
+                        answer_region_id=region.answer_region_id,
+                        text=text,
+                        marked_choice=marked_choice,
+                        status=OCRStatus.RAW,
+                    ))
+
+                succeeded += 1
+
+            except requests.exceptions.RequestException:
+                raise  # 외부 except로 전파 → self.retry() 호출
+
+            except Exception as e:
+                failed += 1
+                failed_targets.append({
+                    "answerRegionId": region.answer_region_id,
+                    "answerSheetId": sheet.answer_sheet_id,
+                    "reason": str(e),
+                })
+
+            if index % max(1, total // 10) == 0 or index == total:
+                job.progress_json = _build_progress(index, total, "OCR", f"{index}/{total} 답안 영역을 인식 중입니다.")
+                db.commit()
+
+        job.completed_at = datetime.now(timezone.utc)
+        job.result_json = {
+            "summary": {"processed": total, "succeeded": succeeded, "failed": failed},
+            "resultRef": {"type": "ocr_results", "examId": exam.exam_id},
+        }
+
+        if failed > 0:
+            job.status = JobStatus.FAILED
+            job.progress_json = _build_progress(total, total, "FAILED", "일부 답안 영역의 OCR에 실패했습니다.")
+            job.error_json = {
+                "code": "PARTIAL_OCR_FAILED",
+                "message": "일부 답안 영역의 OCR에 실패했습니다.",
+                "retryable": False,
+                "category": "provider",
+                "failedTargets": {"answerRegionIds": [t["answerRegionId"] for t in failed_targets]},
+            }
+        else:
+            job.status = JobStatus.DONE
+            job.progress_json = _build_progress(total, total, "DONE", "답안 OCR이 완료되었습니다.")
+
+        db.commit()
+
+    except requests.exceptions.RequestException as e:
+        raise self.retry(exc=e, countdown=2 ** self.request.retries)
+
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.progress_json = _build_progress(0, 0, "FAILED", "답안 OCR에 실패했습니다.")
+        job.error_json = {
+            "code": "INTERNAL",
+            "message": str(e),
+            "retryable": False,
+            "category": "internal",
+        }
+        db.commit()
+
+    finally:
+        db.close()
+
+
 def _normalize_name(raw: str) -> str:
     return " ".join(raw.split()).strip()
 
 
 def _normalize_student_no(raw: str) -> str:
     return "".join(ch for ch in raw if ch.isdigit())
+
+
+def _parse_marked_choice(raw: str) -> int | None:
+    digits = [ch for ch in raw if ch.isdigit()]
+    return int(digits[0]) if len(digits) == 1 else None

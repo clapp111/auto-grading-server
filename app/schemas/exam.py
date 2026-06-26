@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.enums.exam_status import ExamStatus
+from app.enums.layout_mode import LayoutMode
 from app.schemas.common import CursorMeta
 
 
@@ -20,6 +21,7 @@ class ExamCreateRequest(BaseModel):
 class ExamUpdateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=200)
+    layout_mode: LayoutMode | None = None
 
 
 class ExamResponse(BaseModel):
@@ -27,6 +29,7 @@ class ExamResponse(BaseModel):
     name: str
     description: str | None
     status: ExamStatus
+    layout_mode: LayoutMode
     student_count: int
     created_at: datetime
     updated_at: datetime | None

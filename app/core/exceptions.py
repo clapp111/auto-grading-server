@@ -15,3 +15,11 @@ class ModelAnswerNotFoundError(Exception): pass
 class RubricNotFoundError(Exception): pass
 
 class AnswerSheetNotFoundError(Exception): pass
+
+class AnswerRegionNotFoundError(Exception): pass
+
+class OcrResultNotFoundError(Exception): pass
+
+class StudentNotFoundError(Exception): pass
+
+class GradeNotFoundError(Exception): pass
