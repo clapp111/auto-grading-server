@@ -34,3 +34,6 @@ class S3StorageClient(StorageClient):
     def download(self, file_key: str) -> bytes:
         response = self._client.get_object(Bucket=settings.S3_BUCKET, Key=file_key)
         return response["Body"].read()
+
+    def delete(self, file_key: str) -> None:
+        self._client.delete_object(Bucket=settings.S3_BUCKET, Key=file_key)

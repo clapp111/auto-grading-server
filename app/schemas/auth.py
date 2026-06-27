@@ -7,6 +7,7 @@ from app.schemas.member import MemberResponse
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
+    name: str
     affiliation: str | None = None
     affiliation_role: AffiliationRole
 

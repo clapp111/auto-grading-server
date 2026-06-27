@@ -10,3 +10,6 @@ class StorageClient(ABC):
 
     @abstractmethod
     def download(self, file_key: str) -> bytes: ...
+
+    @abstractmethod
+    def delete(self, file_key: str) -> None: ...

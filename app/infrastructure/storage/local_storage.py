@@ -19,3 +19,7 @@ class LocalStorageClient(StorageClient):
     def download(self, file_key: str) -> bytes:
         path = Path(settings.LOCAL_STORAGE_PATH) / file_key
         return path.read_bytes()
+
+    def delete(self, file_key: str) -> None:
+        path = Path(settings.LOCAL_STORAGE_PATH) / file_key
+        path.unlink(missing_ok=True)

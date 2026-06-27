@@ -11,6 +11,7 @@ from app.core.exceptions import (
     ExamNotFoundError,
     GradeNotFoundError,
     InvalidCredentialsError,
+    InvalidCurrentPasswordError,
     JobNotFoundError,
     ModelAnswerNotFoundError,
     OcrResultNotFoundError,
@@ -49,6 +50,14 @@ async def invalid_credentials_handler(request: Request, exc: InvalidCredentialsE
     return JSONResponse(
         status_code=401,
         content={"data": None, "meta": None, "error": {"code": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호가 올바르지 않습니다."}},
+    )
+
+
+@app.exception_handler(InvalidCurrentPasswordError)
+async def invalid_current_password_handler(request: Request, exc: InvalidCurrentPasswordError) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={"data": None, "meta": None, "error": {"code": "INVALID_CURRENT_PASSWORD", "message": "현재 비밀번호가 올바르지 않습니다."}},
     )
 
 

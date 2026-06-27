@@ -23,6 +23,7 @@ class AuthService:
         member = self.repo.create(
             email=request.email,
             password=hash_password(request.password),
+            name=request.name,
             affiliation=request.affiliation,
             affiliation_role=request.affiliation_role,
             role=Role.NORMAL,

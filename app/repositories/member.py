@@ -19,3 +19,10 @@ class MemberRepository:
         self.db.commit()
         self.db.refresh(member)
         return member
+
+    def update(self, member: Member, **kwargs) -> Member:
+        for key, value in kwargs.items():
+            setattr(member, key, value)
+        self.db.commit()
+        self.db.refresh(member)
+        return member
