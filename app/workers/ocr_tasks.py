@@ -6,6 +6,67 @@ from app.workers.utils import _build_progress
 
 
 @celery_app.task(bind=True, max_retries=3)
+def run_problem_ocr(self, job_id: int):
+    import app.db.models  # noqa: F401
+    from app.db.session import SessionLocal
+    from app.enums.job_status import JobStatus
+    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.pdf.renderer import crop_region
+    from app.infrastructure.storage.deps import get_storage
+    from app.models.job import Job
+    from app.schemas.common import Region
+
+    db = SessionLocal()
+    job = db.get(Job, job_id)
+    try:
+        job.status = JobStatus.RUNNING
+        job.started_at = datetime.now(timezone.utc)
+        job.celery_task_id = self.request.id
+        job.progress_json = _build_progress(0, 1, "OCR", "문제 OCR을 시작합니다.")
+        db.commit()
+
+        problem = job.problem
+        exam = job.exam
+
+        if not problem.region:
+            raise ValueError("OCR 대상 region이 지정되지 않았습니다.")
+        if not exam.problem_sheet_file_key:
+            raise ValueError("문제지 파일이 업로드되지 않았습니다.")
+
+        region = Region(**problem.region)
+        storage = get_storage()
+        pdf_bytes = storage.download(exam.problem_sheet_file_key)
+
+        image_bytes = crop_region(pdf_bytes, region.page, region.x, region.y, region.w, region.h)
+
+        ocr_client = ClovaOcrClient()
+        extracted_text = ocr_client.recognize(image_bytes)
+
+        problem.problem_text = extracted_text
+        job.progress_json = _build_progress(1, 1, "DONE", "문제 OCR이 완료되었습니다.")
+        job.status = JobStatus.DONE
+        job.completed_at = datetime.now(timezone.utc)
+        job.result_json = {
+            "summary": {"processed": 1, "succeeded": 1, "failed": 0},
+            "resultRef": {"type": "problem", "problemId": problem.problem_id},
+        }
+        db.commit()
+
+    except requests.exceptions.RequestException as e:
+        raise self.retry(exc=e, countdown=2 ** self.request.retries)
+
+    except Exception as e:
+        db.rollback()
+        job.status = JobStatus.FAILED
+        job.progress_json = _build_progress(0, 0, "FAILED", "문제 OCR에 실패했습니다.")
+        job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
+        db.commit()
+
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, max_retries=3)
 def run_model_answer_ocr(self, job_id: int):
     import app.db.models  # noqa: F401 - 모든 모델을 SQLAlchemy 레지스트리에 등록
     from app.db.session import SessionLocal
@@ -58,6 +119,7 @@ def run_model_answer_ocr(self, job_id: int):
         raise self.retry(exc=e, countdown=2 ** self.request.retries)
 
     except Exception as e:
+        db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "모범답안 OCR에 실패했습니다.")
         job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
@@ -96,12 +158,17 @@ def run_student_id_ocr(self, job_id: int):
 
         name_region = Region(**exam.student_name_region)
         no_region = Region(**exam.student_no_region)
+        answer_sheet_ids = (job.input_json or {}).get("answer_sheet_ids")
+        sheet_filter = [
+            AnswerSheet.exam_id == exam.exam_id,
+            AnswerSheet.status == SheetStatus.UNMATCHED,
+        ]
+        if answer_sheet_ids:
+            sheet_filter.append(AnswerSheet.answer_sheet_id.in_(answer_sheet_ids))
+
         sheets = (
             db.query(AnswerSheet)
-            .filter(
-                AnswerSheet.exam_id == exam.exam_id,
-                AnswerSheet.status == SheetStatus.UNMATCHED,
-            )
+            .filter(*sheet_filter)
             .order_by(AnswerSheet.answer_sheet_id)
             .all()
         )
@@ -151,18 +218,31 @@ def run_student_id_ocr(self, job_id: int):
                 elif ocr_name and student.name != ocr_name:
                     student.name = ocr_name
 
-                sheet.student_id = student.student_id
-                sheet.status = SheetStatus.MATCHED
-                matched += 1
+                duplicate_sheet = (
+                    db.query(AnswerSheet)
+                    .filter(
+                        AnswerSheet.exam_id == exam.exam_id,
+                        AnswerSheet.student_id == student.student_id,
+                        AnswerSheet.answer_sheet_id != sheet.answer_sheet_id,
+                    )
+                    .first()
+                )
+                if duplicate_sheet:
+                    failed += 1
+                    failed_targets.append(
+                        {
+                            "answerSheetId": sheet.answer_sheet_id,
+                            "reason": "DUPLICATE_STUDENT_ID",
+                            "ocrName": ocr_name,
+                        }
+                    )
+                else:
+                    sheet.student_id = student.student_id
+                    sheet.status = SheetStatus.MATCHED
+                    matched += 1
 
             job.progress_json = _build_progress(index, total, "OCR", f"{index}/{total} 답안지의 학생 정보를 인식 중입니다.")
             db.commit()
-
-        exam.student_count = (
-            db.query(Student)
-            .filter(Student.exam_id == exam.exam_id)
-            .count()
-        )
 
         job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
@@ -194,6 +274,7 @@ def run_student_id_ocr(self, job_id: int):
         raise self.retry(exc=e, countdown=2 ** self.request.retries)
 
     except Exception as e:
+        db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "학생 식별 OCR에 실패했습니다.")
         job.error_json = {
@@ -214,6 +295,7 @@ def run_answer_ocr(self, job_id: int):
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
     from app.enums.ocr_status import OCRStatus
+    from app.enums.layout_mode import LayoutMode
     from app.enums.problem_type import ProblemType
     from app.infrastructure.ocr.ocr_client import ClovaOcrClient
     from app.infrastructure.pdf.renderer import crop_region
@@ -234,6 +316,9 @@ def run_answer_ocr(self, job_id: int):
         db.commit()
 
         exam = job.exam
+        scope = job.input_json or {}
+        scope_layout_mode = ((scope.get("scope") or {}).get("layoutMode"))
+        layout_mode = LayoutMode(scope_layout_mode) if scope_layout_mode else exam.layout_mode
         sheets = (
             db.query(AnswerSheet)
             .filter(
@@ -252,7 +337,10 @@ def run_answer_ocr(self, job_id: int):
             regions = (
                 db.query(AnswerRegion)
                 .options(selectinload(AnswerRegion.problem))
-                .filter(AnswerRegion.answer_sheet_id == sheet.answer_sheet_id)
+                .filter(
+                    AnswerRegion.answer_sheet_id == sheet.answer_sheet_id,
+                    AnswerRegion.layout_mode == layout_mode,
+                )
                 .all()
             )
             for region in regions:
@@ -282,6 +370,15 @@ def run_answer_ocr(self, job_id: int):
 
         for index, (sheet, region) in enumerate(targets, start=1):
             try:
+                ocr_result = (
+                    db.query(OCRResult)
+                    .filter(OCRResult.answer_region_id == region.answer_region_id)
+                    .first()
+                )
+                if ocr_result and ocr_result.updated_at >= region.region_updated_at:
+                    succeeded += 1
+                    continue
+
                 if sheet.answer_sheet_id != current_sheet_id:
                     current_sheet_id = sheet.answer_sheet_id
                     current_pdf_bytes = storage.download(sheet.file_key)
@@ -300,21 +397,19 @@ def run_answer_ocr(self, job_id: int):
                     marked_choice = None
                     text = ocr_text
 
-                ocr_result = (
-                    db.query(OCRResult)
-                    .filter(OCRResult.answer_region_id == region.answer_region_id)
-                    .first()
-                )
+                now = datetime.now(timezone.utc)
                 if ocr_result:
                     ocr_result.text = text
                     ocr_result.marked_choice = marked_choice
                     ocr_result.status = OCRStatus.RAW
+                    ocr_result.updated_at = now
                 else:
                     db.add(OCRResult(
                         answer_region_id=region.answer_region_id,
                         text=text,
                         marked_choice=marked_choice,
                         status=OCRStatus.RAW,
+                        updated_at=now,
                     ))
 
                 succeeded += 1
@@ -360,6 +455,7 @@ def run_answer_ocr(self, job_id: int):
         raise self.retry(exc=e, countdown=2 ** self.request.retries)
 
     except Exception as e:
+        db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "답안 OCR에 실패했습니다.")
         job.error_json = {

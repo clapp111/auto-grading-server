@@ -72,3 +72,12 @@ class GradeRepository:
         )
         self.db.commit()
         return count
+
+    def delete_all_by_student(self, student_id: int, commit: bool = True) -> None:
+        (
+            self.db.query(Grade)
+            .filter(Grade.student_id == student_id)
+            .delete(synchronize_session=False)
+        )
+        if commit:
+            self.db.commit()

@@ -5,24 +5,26 @@ from app.models.member import Member
 from app.schemas.answer_sheet import (
     AnswerSheetDownloadResponse,
     AnswerSheetPatchRequest,
+    AnswerSheetPresignedUrlResponse,
     AnswerSheetResponse,
     IdRegionSaveRequest,
+    UploadCompleteResponse,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.job import JobStartedResponse
-from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
+from app.schemas.s3 import PresignedUrlRequest
 from app.services.answer_sheet import AnswerSheetService, get_answer_sheet_service
 
 router = APIRouter(tags=["answer-sheets"])
 
 
-@router.post("/exams/{exam_id}/answer-sheets", status_code=201, response_model=ApiResponse[PresignedUrlResponse])
+@router.post("/exams/{exam_id}/answer-sheets", status_code=201, response_model=ApiResponse[AnswerSheetPresignedUrlResponse])
 async def issue_answer_sheet_url(
     exam_id: int,
     request: PresignedUrlRequest,
     current_member: Member = Depends(get_current_member),
     service: AnswerSheetService = Depends(get_answer_sheet_service),
-) -> ApiResponse[PresignedUrlResponse]:
+) -> ApiResponse[AnswerSheetPresignedUrlResponse]:
     return ApiResponse(data=service.issue_upload_url(exam_id, current_member.member_id, request))
 
 
@@ -53,6 +55,15 @@ async def save_id_regions(
     service: AnswerSheetService = Depends(get_answer_sheet_service),
 ) -> ApiResponse[JobStartedResponse]:
     return ApiResponse(data=service.save_id_regions(exam_id, current_member.member_id, request))
+
+
+@router.post("/answer-sheets/{answer_sheet_id}/complete", status_code=202, response_model=ApiResponse[UploadCompleteResponse])
+async def complete_answer_sheet_upload(
+    answer_sheet_id: int,
+    current_member: Member = Depends(get_current_member),
+    service: AnswerSheetService = Depends(get_answer_sheet_service),
+) -> ApiResponse[UploadCompleteResponse]:
+    return ApiResponse(data=service.complete_upload(answer_sheet_id, current_member.member_id))
 
 
 @router.get("/answer-sheets/{answer_sheet_id}/download", response_model=ApiResponse[AnswerSheetDownloadResponse])

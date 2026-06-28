@@ -48,20 +48,20 @@ class OcrService:
             raise OcrResultNotFoundError()
         sheet = ocr_result.answer_region.answer_sheet
         exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id:
+        if not exam or exam.member_id != member_id or ocr_result.answer_region.layout_mode != exam.layout_mode:
             raise OcrResultNotFoundError()
         return ocr_result
 
     def run_ocr(self, exam_id: int, member_id: int) -> JobStartedResponse:
         from app.workers.ocr_tasks import run_answer_ocr
 
-        self._get_exam_or_raise(exam_id, member_id)
+        exam = self._get_exam_or_raise(exam_id, member_id)
         job = self.job_repo.create(
             exam_id=exam_id,
             type=JobType.ANSWER_OCR_RUN,
             requested_by_member_id=member_id,
             input_json={
-                "scope": {"examId": exam_id},
+                "scope": {"examId": exam_id, "layoutMode": exam.layout_mode},
                 "source": {"trigger": "api", "endpoint": f"/api/v1/exams/{exam_id}/ocr/run"},
             },
         )
@@ -79,7 +79,7 @@ class OcrService:
 
         for sheet in matched_sheets:
             student = sheet.student
-            total, confirmed = self.ocr_result_repo.count_by_answer_sheet(sheet.answer_sheet_id)
+            total, confirmed = self.ocr_result_repo.count_by_answer_sheet(sheet.answer_sheet_id, exam.layout_mode)
             percent = (confirmed * 100 // total) if total > 0 else 0
 
             if total > 0 and confirmed == total:
@@ -102,7 +102,7 @@ class OcrService:
 
         return OcrProgressResponse(
             confirmed_student_count=confirmed_student_count,
-            total_student_count=exam.student_count,
+            total_student_count=len(matched_sheets),
             students=all_items,
         )
 
@@ -114,7 +114,7 @@ class OcrService:
         if not exam or exam.member_id != member_id:
             raise StudentNotFoundError()
 
-        results = self.ocr_result_repo.list_by_student(student_id)
+        results = self.ocr_result_repo.list_by_student(student_id, exam.layout_mode)
         return [_to_response(r) for r in results]
 
     def update_ocr_result(self, ocr_result_id: int, member_id: int, request: OcrResultUpdateRequest) -> OcrResultResponse:

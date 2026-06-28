@@ -17,6 +17,7 @@ from app.repositories.model_answer import ModelAnswerRepository
 from app.repositories.ocr_result import OcrResultRepository
 from app.repositories.problem import ProblemRepository
 from app.repositories.rubric import RubricRepository
+from app.repositories.student import StudentRepository
 from app.schemas.grade import (
     GradeBulkConfirmResponse,
     GradingProgressResponse,
@@ -39,6 +40,7 @@ class GradeService:
         rubric_repo: RubricRepository,
         ocr_result_repo: OcrResultRepository,
         model_answer_repo: ModelAnswerRepository,
+        student_repo: StudentRepository,
         job_repo: JobRepository,
     ):
         self.grade_repo = grade_repo
@@ -47,6 +49,7 @@ class GradeService:
         self.rubric_repo = rubric_repo
         self.ocr_result_repo = ocr_result_repo
         self.model_answer_repo = model_answer_repo
+        self.student_repo = student_repo
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
@@ -74,17 +77,17 @@ class GradeService:
         return grade
 
     def get_grading_progress(self, exam_id: int, member_id: int) -> GradingProgressResponse:
-        exam = self._get_exam_or_raise(exam_id, member_id)
+        self._get_exam_or_raise(exam_id, member_id)
         problems = self.problem_repo.list_by_exam(exam_id)
+        student_count = self.student_repo.count_by_exam(exam_id)
 
         total_confirmed = 0
-        total_possible = exam.student_count * len(problems)
+        total_possible = student_count * len(problems)
         items: list[ProblemGradingItem] = []
 
         for problem in problems:
             graded, confirmed = self.grade_repo.count_by_problem(problem.problem_id)
             total_confirmed += confirmed
-            student_count = exam.student_count
             percent = (confirmed * 100 // student_count) if student_count > 0 else 0
             items.append(ProblemGradingItem(
                 problem_id=problem.problem_id,
@@ -238,5 +241,6 @@ def get_grade_service(db: Session = Depends(get_db)) -> GradeService:
         RubricRepository(db),
         OcrResultRepository(db),
         ModelAnswerRepository(db),
+        StudentRepository(db),
         JobRepository(db),
     )

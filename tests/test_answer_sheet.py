@@ -73,7 +73,10 @@ def mock_job():
 
 @pytest.fixture
 def service_with_mocks(mock_exam, mock_sheet, mock_job):
+    answer_region_repo = MagicMock()
     answer_sheet_repo = MagicMock()
+    ocr_result_repo = MagicMock()
+    grade_repo = MagicMock()
     student_repo = MagicMock()
     exam_repo = MagicMock()
     job_repo = MagicMock()
@@ -88,14 +91,20 @@ def service_with_mocks(mock_exam, mock_sheet, mock_job):
     storage.generate_presigned_url.return_value = UPLOAD_URL
 
     svc = AnswerSheetService(
+        answer_region_repo=answer_region_repo,
         answer_sheet_repo=answer_sheet_repo,
+        ocr_result_repo=ocr_result_repo,
+        grade_repo=grade_repo,
         student_repo=student_repo,
         exam_repo=exam_repo,
         job_repo=job_repo,
         storage=storage,
     )
     mocks = {
+        "answer_region_repo": answer_region_repo,
         "answer_sheet_repo": answer_sheet_repo,
+        "ocr_result_repo": ocr_result_repo,
+        "grade_repo": grade_repo,
         "student_repo": student_repo,
         "exam_repo": exam_repo,
         "job_repo": job_repo,
@@ -232,6 +241,26 @@ class TestGetDownloadUrl:
 
 
 # ── 5. 답안지 수동 매칭 (PATCH) ──────────────────────────────────────
+
+class TestDeleteAnswerSheet:
+    def test_deletes_related_records_before_sheet_and_student(self, service_with_mocks, mock_sheet):
+        svc, mocks = service_with_mocks
+        student = MagicMock(student_id=50)
+        mock_sheet.student = student
+        mock_sheet.student_id = student.student_id
+        mocks["student_repo"].count_by_exam.return_value = 0
+
+        svc.delete_answer_sheet(ANSWER_SHEET_ID, MEMBER_ID)
+
+        mocks["storage"].delete.assert_called_once_with(FILE_KEY)
+        mocks["ocr_result_repo"].delete_all_by_answer_sheet.assert_called_once_with(ANSWER_SHEET_ID, commit=False)
+        mocks["answer_region_repo"].delete_all_by_answer_sheet.assert_called_once_with(ANSWER_SHEET_ID, commit=False)
+        mocks["grade_repo"].delete_all_by_student.assert_called_once_with(student.student_id, commit=False)
+        mocks["answer_sheet_repo"].delete.assert_called_once_with(mock_sheet, commit=False)
+        mocks["student_repo"].delete.assert_called_once_with(student, commit=False)
+        mocks["student_repo"].count_by_exam.assert_called_once_with(EXAM_ID)
+        mocks["answer_sheet_repo"].db.commit.assert_called_once()
+
 
 class TestPatchAnswerSheet:
     def test_creates_new_student_when_not_found(self, service_with_mocks, mock_sheet):

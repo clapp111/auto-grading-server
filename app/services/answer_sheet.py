@@ -9,15 +9,20 @@ from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
 from app.models.answer_sheet import AnswerSheet
+from app.repositories.answer_region import AnswerRegionRepository
 from app.repositories.answer_sheet import AnswerSheetRepository
 from app.repositories.exam import ExamRepository
+from app.repositories.grade import GradeRepository
 from app.repositories.job import JobRepository
+from app.repositories.ocr_result import OcrResultRepository
 from app.repositories.student import StudentRepository
 from app.schemas.answer_sheet import (
     AnswerSheetDownloadResponse,
     AnswerSheetPatchRequest,
+    AnswerSheetPresignedUrlResponse,
     AnswerSheetResponse,
     IdRegionSaveRequest,
+    UploadCompleteResponse,
 )
 from app.schemas.job import JobStartedResponse
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
@@ -26,13 +31,19 @@ from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 class AnswerSheetService:
     def __init__(
         self,
+        answer_region_repo: AnswerRegionRepository,
         answer_sheet_repo: AnswerSheetRepository,
+        ocr_result_repo: OcrResultRepository,
+        grade_repo: GradeRepository,
         student_repo: StudentRepository,
         exam_repo: ExamRepository,
         job_repo: JobRepository,
         storage: StorageClient,
     ):
+        self.answer_region_repo = answer_region_repo
         self.answer_sheet_repo = answer_sheet_repo
+        self.ocr_result_repo = ocr_result_repo
+        self.grade_repo = grade_repo
         self.student_repo = student_repo
         self.exam_repo = exam_repo
         self.job_repo = job_repo
@@ -53,12 +64,12 @@ class AnswerSheetService:
             raise AnswerSheetNotFoundError()
         return sheet
 
-    def issue_upload_url(self, exam_id: int, member_id: int, request: PresignedUrlRequest) -> PresignedUrlResponse:
+    def issue_upload_url(self, exam_id: int, member_id: int, request: PresignedUrlRequest) -> AnswerSheetPresignedUrlResponse:
         self._get_exam_or_raise(exam_id, member_id)
         file_key = self.storage.generate_key(f"exams/{exam_id}/answer-sheets", request.file_name)
-        self.answer_sheet_repo.create(exam_id=exam_id, file_key=file_key)
+        sheet = self.answer_sheet_repo.create(exam_id=exam_id, file_key=file_key)
         upload_url = self.storage.generate_presigned_url(file_key, request.content_type)
-        return PresignedUrlResponse(upload_url=upload_url, file_key=file_key)
+        return AnswerSheetPresignedUrlResponse(upload_url=upload_url, file_key=file_key, answer_sheet_id=sheet.answer_sheet_id)
 
     def list_answer_sheets(self, exam_id: int, member_id: int) -> list[AnswerSheetResponse]:
         self._get_exam_or_raise(exam_id, member_id)
@@ -67,7 +78,19 @@ class AnswerSheetService:
 
     def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
-        self.answer_sheet_repo.delete(sheet)
+        db = self.answer_sheet_repo.db
+        student = sheet.student
+
+        self.storage.delete(sheet.file_key)
+        self.ocr_result_repo.delete_all_by_answer_sheet(sheet.answer_sheet_id, commit=False)    # OCR 결과 삭제
+        self.answer_region_repo.delete_all_by_answer_sheet(sheet.answer_sheet_id, commit=False) # 답안 영역 삭제
+        if student:
+            self.grade_repo.delete_all_by_student(student.student_id, commit=False)             # 성적 삭제
+        self.answer_sheet_repo.delete(sheet, commit=False)                                      # 답안지 삭제
+        if student:
+            self.student_repo.delete(student, commit=False)                                     # 학생 삭제
+
+        db.commit()
 
     def get_download_url(self, answer_sheet_id: int, member_id: int) -> AnswerSheetDownloadResponse:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
@@ -98,6 +121,27 @@ class AnswerSheetService:
         )
         run_student_id_ocr.delay(job.job_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
+
+    def complete_upload(self, answer_sheet_id: int, member_id: int) -> UploadCompleteResponse:
+        from app.workers.ocr_tasks import run_student_id_ocr
+
+        sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
+        exam = self.exam_repo.get_by_id(sheet.exam_id)
+
+        if sheet.status != SheetStatus.UNMATCHED or not (exam.student_name_region and exam.student_no_region):
+            return UploadCompleteResponse(answer_sheet_id=answer_sheet_id)
+
+        job = self.job_repo.create(
+            exam_id=sheet.exam_id,
+            type=JobType.ANSWER_SHEET_RECOGNIZE,
+            requested_by_member_id=member_id,
+            input_json={
+                "answer_sheet_ids": [answer_sheet_id],
+                "source": {"trigger": "upload_complete", "answerSheetId": answer_sheet_id},
+            },
+        )
+        run_student_id_ocr.delay(job.job_id)
+        return UploadCompleteResponse(answer_sheet_id=answer_sheet_id, job_id=job.job_id)
 
     def patch_answer_sheet(self, answer_sheet_id: int, member_id: int, request: AnswerSheetPatchRequest) -> AnswerSheetResponse:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
@@ -136,7 +180,10 @@ def get_answer_sheet_service(
     storage: StorageClient = Depends(get_storage),
 ) -> AnswerSheetService:
     return AnswerSheetService(
+        AnswerRegionRepository(db),
         AnswerSheetRepository(db),
+        OcrResultRepository(db),
+        GradeRepository(db),
         StudentRepository(db),
         ExamRepository(db),
         JobRepository(db),

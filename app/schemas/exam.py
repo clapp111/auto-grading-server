@@ -31,6 +31,8 @@ class ExamResponse(BaseModel):
     status: ExamStatus
     layout_mode: LayoutMode
     student_count: int
+    problem_sheet_url: str | None = None
+    model_answer_url: str | None = None
     created_at: datetime
     updated_at: datetime | None
 

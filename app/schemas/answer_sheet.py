@@ -28,3 +28,14 @@ class AnswerSheetPatchRequest(BaseModel):
 class IdRegionSaveRequest(BaseModel):
     name_region: Region
     student_no_region: Region
+
+
+class AnswerSheetPresignedUrlResponse(BaseModel):
+    upload_url: str
+    file_key: str
+    answer_sheet_id: int
+
+
+class UploadCompleteResponse(BaseModel):
+    answer_sheet_id: int
+    job_id: int | None = None

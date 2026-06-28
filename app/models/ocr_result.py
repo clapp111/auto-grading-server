@@ -1,6 +1,7 @@
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, Text
+from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -18,5 +19,6 @@ class OCRResult(Base):
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     marked_choice: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[OCRStatus] = mapped_column(SAEnum(OCRStatus), nullable=False, default=OCRStatus.RAW)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     answer_region: Mapped["AnswerRegion"] = relationship(back_populates="ocr_result")

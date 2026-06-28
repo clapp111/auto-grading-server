@@ -27,5 +27,6 @@ class ProblemResponse(BaseModel):
     max_score: int
     region: Region | None
     language: ProgrammingLanguage | None
+    problem_text: str | None
 
     model_config = ConfigDict(from_attributes=True)

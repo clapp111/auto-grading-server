@@ -9,16 +9,16 @@ T = TypeVar("T")
 
 class Region(BaseModel):
     page: int
-    x: int
-    y: int
-    w: int
-    h: int
+    x: float
+    y: float
+    w: float
+    h: float
 
 
 class Point(BaseModel):
     page: int
-    x: int
-    y: int
+    x: float
+    y: float
 
 
 # ── 페이지네이션 메타 ───────────────────────────────────────────

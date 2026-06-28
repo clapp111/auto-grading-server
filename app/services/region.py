@@ -45,7 +45,7 @@ class RegionService:
             raise AnswerRegionNotFoundError()
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
         exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id:
+        if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
             raise AnswerRegionNotFoundError()
         return region
 
@@ -56,7 +56,7 @@ class RegionService:
         exam = self.exam_repo.get_by_id(sheet.exam_id)
         if not exam or exam.member_id != member_id:
             raise AnswerSheetNotFoundError()
-        regions = self.answer_region_repo.list_by_answer_sheet(answer_sheet_id)
+        regions = self.answer_region_repo.list_by_answer_sheet(answer_sheet_id, exam.layout_mode)
         return [_to_response(r) for r in regions]
 
     def create_region(self, answer_sheet_id: int, member_id: int, request: AnswerRegionCreateRequest) -> AnswerRegionResponse:
@@ -67,14 +67,25 @@ class RegionService:
         if not exam or exam.member_id != member_id:
             raise AnswerSheetNotFoundError()
 
-        region = self.answer_region_repo.create(
+        updates = {
+            "problem_id": request.problem_id,
+            "shape": request.shape,
+            "bbox_region": request.bbox_region.model_dump() if request.bbox_region else None,
+            "polygon_points": [p.model_dump() for p in request.polygon_points] if request.polygon_points else None,
+        }
+        region = self.answer_region_repo.get_by_sheet_problem_and_mode(
             answer_sheet_id=answer_sheet_id,
             problem_id=request.problem_id,
-            shape=request.shape,
             layout_mode=exam.layout_mode,
-            bbox_region=request.bbox_region.model_dump() if request.bbox_region else None,
-            polygon_points=[p.model_dump() for p in request.polygon_points] if request.polygon_points else None,
         )
+        if region:
+            region = self.answer_region_repo.update(region, **updates)
+        else:
+            region = self.answer_region_repo.create(
+                answer_sheet_id=answer_sheet_id,
+                layout_mode=exam.layout_mode,
+                **updates,
+            )
         region = self.answer_region_repo.get_by_id(region.answer_region_id)
         return _to_response(region)
 
@@ -101,26 +112,26 @@ class RegionService:
         self.answer_region_repo.delete(region)
 
     def save_template(self, exam_id: int, member_id: int, request: RegionTemplateRequest) -> list[AnswerRegionResponse]:
-        self._get_exam_or_raise(exam_id, member_id)
+        exam = self._get_exam_or_raise(exam_id, member_id)
 
         sheets = sorted(self.answer_sheet_repo.list_by_exam(exam_id), key=lambda s: s.answer_sheet_id)
         if not sheets:
             raise AnswerSheetNotFoundError()
 
         first_sheet = sheets[0]
-        self.answer_region_repo.delete_all_by_answer_sheet(first_sheet.answer_sheet_id)
+        self.answer_region_repo.delete_all_by_answer_sheet(first_sheet.answer_sheet_id, exam.layout_mode)
 
         for item in request.regions:
             self.answer_region_repo.create(
                 answer_sheet_id=first_sheet.answer_sheet_id,
                 problem_id=item.problem_id,
                 shape=item.shape,
-                layout_mode=LayoutMode.FIXED,
+                layout_mode=exam.layout_mode,
                 bbox_region=item.bbox_region.model_dump() if item.bbox_region else None,
                 polygon_points=[p.model_dump() for p in item.polygon_points] if item.polygon_points else None,
             )
 
-        regions = self.answer_region_repo.list_by_answer_sheet(first_sheet.answer_sheet_id)
+        regions = self.answer_region_repo.list_by_answer_sheet(first_sheet.answer_sheet_id, exam.layout_mode)
         return [_to_response(r) for r in regions]
 
     def apply_template(self, exam_id: int, member_id: int) -> JobStartedResponse:

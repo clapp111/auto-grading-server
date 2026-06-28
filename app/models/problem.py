@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, JSON, String
+from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
 
@@ -25,10 +25,11 @@ class Problem(Base):
     max_score: Mapped[int] = mapped_column(Integer, nullable=False)
     region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     language: Mapped[ProgrammingLanguage | None] = mapped_column(SAEnum(ProgrammingLanguage), nullable=True)
+    problem_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     exam: Mapped["Exam"] = relationship(back_populates="problems")
-    model_answer: Mapped["ModelAnswer | None"] = relationship(back_populates="problem", uselist=False)
-    rubrics: Mapped[list["Rubric"]] = relationship(back_populates="problem")
-    answer_regions: Mapped[list["AnswerRegion"]] = relationship(back_populates="problem")
-    grades: Mapped[list["Grade"]] = relationship(back_populates="problem")
+    model_answer: Mapped["ModelAnswer | None"] = relationship(back_populates="problem", uselist=False, cascade="all, delete-orphan")
+    rubrics: Mapped[list["Rubric"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
+    answer_regions: Mapped[list["AnswerRegion"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
+    grades: Mapped[list["Grade"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
     jobs: Mapped[list["Job"]] = relationship(back_populates="problem")

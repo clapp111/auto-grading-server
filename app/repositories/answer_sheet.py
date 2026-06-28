@@ -35,6 +35,7 @@ class AnswerSheetRepository:
         self.db.refresh(sheet)
         return sheet
 
-    def delete(self, sheet: AnswerSheet) -> None:
+    def delete(self, sheet: AnswerSheet, commit: bool = True) -> None:
         self.db.delete(sheet)
-        self.db.commit()
+        if commit:
+            self.db.commit()

@@ -49,6 +49,7 @@ def suggest_rubric_task(self, job_id: int):
             label=problem.label,
             problem_type=problem.type.value,
             max_score=problem.max_score,
+            problem_text=problem.problem_text,
             model_answer_text=model_answer.model_answer_text,
         )
 
@@ -120,6 +121,7 @@ def _call_claude_for_rubric(
     problem_type: str,
     max_score: int,
     model_answer_text: str,
+    problem_text: str | None = None,
 ) -> list[dict]:
     import json
     import anthropic
@@ -127,11 +129,14 @@ def _call_claude_for_rubric(
     client = anthropic.Anthropic(api_key=api_key)
     type_label = _PROBLEM_TYPE_LABELS.get(problem_type, problem_type)
 
+    problem_section = f"문제 내용:\n{problem_text}" if problem_text else "문제 내용: (없음)"
+
     prompt = f"""아래 문제와 모범답안을 분석하여 채점 루브릭 기준들을 생성해주세요.
 
 문제 번호: {label}
 문제 유형: {type_label}
 총 배점: {max_score}점
+{problem_section}
 모범답안:
 {model_answer_text}
 

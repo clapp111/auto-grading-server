@@ -24,9 +24,17 @@ class StudentRepository:
         self.db.refresh(student)
         return student
 
+    def count_by_exam(self, exam_id: int) -> int:
+        return self.db.query(Student).filter(Student.exam_id == exam_id).count()
+
     def update(self, student: Student, **kwargs) -> Student:
         for key, value in kwargs.items():
             setattr(student, key, value)
         self.db.commit()
         self.db.refresh(student)
         return student
+
+    def delete(self, student: Student, commit: bool = True) -> None:
+        self.db.delete(student)
+        if commit:
+            self.db.commit()

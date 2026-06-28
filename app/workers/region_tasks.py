@@ -39,7 +39,10 @@ def apply_region_template(self, job_id: int):
 
         template_regions = (
             db.query(AnswerRegion)
-            .filter(AnswerRegion.answer_sheet_id == template_sheet.answer_sheet_id)
+            .filter(
+                AnswerRegion.answer_sheet_id == template_sheet.answer_sheet_id,
+                AnswerRegion.layout_mode == exam.layout_mode,
+            )
             .all()
         )
 
@@ -60,7 +63,8 @@ def apply_region_template(self, job_id: int):
 
         for index, sheet in enumerate(target_sheets, start=1):
             db.query(AnswerRegion).filter(
-                AnswerRegion.answer_sheet_id == sheet.answer_sheet_id
+                AnswerRegion.answer_sheet_id == sheet.answer_sheet_id,
+                AnswerRegion.layout_mode == exam.layout_mode,
             ).delete()
 
             for tmpl in template_data:
