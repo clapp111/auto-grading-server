@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ExamNotFoundError
 from app.db.session import get_db
 from app.enums.exam_status import ExamStatus
+from app.infrastructure.storage.base import StorageClient
+from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
 from app.models.exam import Exam
 from app.repositories.exam import ExamRepository
@@ -12,9 +14,10 @@ from app.schemas.exam import ExamCreateRequest, ExamCursorMeta, ExamResponse, Ex
 
 
 class ExamService:
-    def __init__(self, repo: ExamRepository, student_repo: StudentRepository):
+    def __init__(self, repo: ExamRepository, student_repo: StudentRepository, storage: StorageClient):
         self.repo = repo
         self.student_repo = student_repo
+        self.storage = storage
 
     def _to_response(self, exam: Exam) -> ExamResponse:
         return ExamResponse(
@@ -81,8 +84,24 @@ class ExamService:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
-        self.repo.delete(exam)
+
+        # S3에 업로드된 파일들을 삭제(문제지, 모범답안, 학생별 답안지)
+        s3_keys = self.repo.get_answer_sheet_file_keys(exam_id)
+        if exam.problem_sheet_file_key:
+            s3_keys.append(exam.problem_sheet_file_key)
+        if exam.model_answer_file_key:
+            s3_keys.append(exam.model_answer_file_key)
+
+        # 테이블 벌크 DELETE
+        self.repo.delete_cascade(exam_id)
+
+        # S3 파일 삭제
+        for key in s3_keys:
+            self.storage.delete(key)
 
 
-def get_exam_service(db: Session = Depends(get_db)) -> ExamService:
-    return ExamService(ExamRepository(db), StudentRepository(db))
+def get_exam_service(
+    db: Session = Depends(get_db),
+    storage: StorageClient = Depends(get_storage),
+) -> ExamService:
+    return ExamService(ExamRepository(db), StudentRepository(db), storage)

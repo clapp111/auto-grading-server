@@ -1,8 +1,17 @@
-from sqlalchemy import func
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.enums.exam_status import ExamStatus
+from app.models.answer_region import AnswerRegion
+from app.models.answer_sheet import AnswerSheet
 from app.models.exam import Exam
+from app.models.grade import Grade
+from app.models.job import Job
+from app.models.model_answer import ModelAnswer
+from app.models.ocr_result import OCRResult
+from app.models.problem import Problem
+from app.models.rubric import Rubric
+from app.models.student import Student
 
 
 class ExamRepository:
@@ -58,6 +67,26 @@ class ExamRepository:
         self.db.refresh(exam)
         return exam
 
-    def delete(self, exam: Exam) -> None:
-        self.db.delete(exam)
+    def get_answer_sheet_file_keys(self, exam_id: int) -> list[str]:
+        return list(
+            self.db.execute(
+                select(AnswerSheet.file_key).where(AnswerSheet.exam_id == exam_id)
+            ).scalars().all()
+        )
+
+    def delete_cascade(self, exam_id: int) -> None:
+        problem_ids = select(Problem.problem_id).where(Problem.exam_id == exam_id)
+        sheet_ids = select(AnswerSheet.answer_sheet_id).where(AnswerSheet.exam_id == exam_id)
+        region_ids = select(AnswerRegion.answer_region_id).where(AnswerRegion.answer_sheet_id.in_(sheet_ids))
+
+        self.db.execute(delete(Grade).where(Grade.problem_id.in_(problem_ids)))
+        self.db.execute(delete(OCRResult).where(OCRResult.answer_region_id.in_(region_ids)))
+        self.db.execute(delete(AnswerRegion).where(AnswerRegion.answer_sheet_id.in_(sheet_ids)))
+        self.db.execute(delete(AnswerSheet).where(AnswerSheet.exam_id == exam_id))
+        self.db.execute(delete(Rubric).where(Rubric.problem_id.in_(problem_ids)))
+        self.db.execute(delete(ModelAnswer).where(ModelAnswer.problem_id.in_(problem_ids)))
+        self.db.execute(delete(Job).where(Job.exam_id == exam_id))
+        self.db.execute(delete(Problem).where(Problem.exam_id == exam_id))
+        self.db.execute(delete(Student).where(Student.exam_id == exam_id))
+        self.db.execute(delete(Exam).where(Exam.exam_id == exam_id))
         self.db.commit()
