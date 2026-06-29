@@ -1,9 +1,9 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamNotFoundError
+from app.core.exceptions import ExamAlreadyAtMaxStepError, ExamNotFoundError
 from app.db.session import get_db
-from app.enums.exam_status import ExamStatus
+from app.enums.exam_step import ExamStep
 from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
@@ -24,7 +24,7 @@ class ExamService:
             exam_id=exam.exam_id,
             name=exam.name,
             description=exam.description,
-            status=exam.status,
+            step=exam.step,
             layout_mode=exam.layout_mode,
             student_count=self.student_repo.count_by_exam(exam.exam_id),
             problem_sheet_url=get_file_url(exam.problem_sheet_file_key),
@@ -39,16 +39,16 @@ class ExamService:
         cursor: str | None,
         size: int,
         search: str | None,
-        status: ExamStatus | None,
+        step: int | None,
     ) -> tuple[list[ExamResponse], ExamCursorMeta]:
         cursor_id = int(cursor) if cursor else None
-        rows = self.repo.list_by_member(member_id, cursor_id, size, search, status)
+        rows = self.repo.list_by_member(member_id, cursor_id, size, search, step)
 
         has_more = len(rows) > size
         items = rows[:size]
         next_cursor = str(items[-1].exam_id) if has_more else None
 
-        counts = self.repo.count_by_status(member_id)
+        counts = self.repo.count_by_step(member_id)
         meta = ExamCursorMeta(
             next_cursor=next_cursor,
             has_more=has_more,
@@ -98,6 +98,15 @@ class ExamService:
         # S3 파일 삭제
         for key in s3_keys:
             self.storage.delete(key)
+
+    def advance_step(self, exam_id: int, member_id: int) -> ExamResponse:
+        exam = self.repo.get_by_id(exam_id)
+        if not exam or exam.member_id != member_id:
+            raise ExamNotFoundError()
+        if exam.step >= ExamStep.MAX:
+            raise ExamAlreadyAtMaxStepError()
+        exam = self.repo.update(exam, step=exam.step + 1)
+        return self._to_response(exam)
 
 
 def get_exam_service(

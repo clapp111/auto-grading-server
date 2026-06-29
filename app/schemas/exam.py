@@ -2,7 +2,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.enums.exam_status import ExamStatus
 from app.enums.layout_mode import LayoutMode
 from app.schemas.common import CursorMeta
 
@@ -28,7 +27,7 @@ class ExamResponse(BaseModel):
     exam_id: int
     name: str
     description: str | None
-    status: ExamStatus
+    step: int
     layout_mode: LayoutMode
     student_count: int
     problem_sheet_url: str | None = None

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from app.core.security import get_current_member
-from app.enums.exam_status import ExamStatus
 from app.models.member import Member
 from app.schemas.answer_region import AnswerRegionResponse, RegionTemplateRequest
 from app.schemas.common import ApiResponse, CursorMeta
@@ -19,11 +18,11 @@ async def list_exams(
     cursor: str | None = Query(default=None),
     size: int = Query(default=20, ge=1, le=100),
     search: str | None = Query(default=None),
-    status: ExamStatus | None = Query(default=None),
+    step: int | None = Query(default=None, ge=0, le=7),
     current_member: Member = Depends(get_current_member),
     service: ExamService = Depends(get_exam_service),
 ) -> ApiResponse[list[ExamResponse]]:
-    items, meta = service.list_exams(current_member.member_id, cursor, size, search, status)
+    items, meta = service.list_exams(current_member.member_id, cursor, size, search, step)
     return ApiResponse(data=items, meta=meta)
 
 
@@ -73,6 +72,15 @@ async def save_region_template(
     service: RegionService = Depends(get_region_service),
 ) -> ApiResponse[list[AnswerRegionResponse]]:
     return ApiResponse(data=service.save_template(exam_id, current_member.member_id, request))
+
+
+@router.post("/{exam_id}/advance", response_model=ApiResponse[ExamResponse])
+async def advance_exam_step(
+    exam_id: int,
+    current_member: Member = Depends(get_current_member),
+    service: ExamService = Depends(get_exam_service),
+) -> ApiResponse[ExamResponse]:
+    return ApiResponse(data=service.advance_step(exam_id, current_member.member_id))
 
 
 @router.post("/{exam_id}/regions/apply-template", status_code=202, response_model=ApiResponse[JobStartedResponse])
