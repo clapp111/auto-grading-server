@@ -143,6 +143,8 @@ def _call_claude_for_rubric(
 조건:
 - 모든 기준의 allocated_score 합계가 정확히 {max_score}점이어야 합니다.
 - 각 기준은 충족 여부를 명확히 판단할 수 있는 단위 요소를 써주세요.
+- 각 기준은 1~2문장으로 간결하게 작성해주세요.
+- 루브릭 기준의 수는 3~5개로 제한해주세요.
 - 한국어로 작성해주세요."""
 
     with client.messages.stream(

@@ -45,10 +45,17 @@ def run_auto_grade(self, job_id: int):
             .filter(ModelAnswer.problem_id == problem.problem_id)
             .first()
         )
-        if not model_answer or not model_answer.model_answer_text:
+        problem_type = problem.type
+        if problem_type not in (ProblemType.MULTIPLE_CHOICE, ProblemType.SHORT_ANSWER):
+            raise ValueError("자동 채점은 객관식/단답형 문제에만 지원됩니다.")
+        if not model_answer:
+            raise ValueError("모범답안이 등록되지 않았습니다.")
+        if problem_type == ProblemType.MULTIPLE_CHOICE and model_answer.correct_choice is None:
+            raise ValueError("모범답안이 등록되지 않았습니다.")
+        if problem_type == ProblemType.SHORT_ANSWER and not model_answer.accepted_answers:
             raise ValueError("모범답안이 등록되지 않았습니다.")
 
-        # OCR 결과가 있는 학생만 대상으로 단일 JOIN 쿼리
+        # OCR 결과가 있는 학생만 대상으로 단일 JOIN 쿼리 (exam.layout_mode와 일치하는 영역만)
         rows = (
             db.query(Student, OCRResult)
             .join(AnswerSheet, AnswerSheet.student_id == Student.student_id)
@@ -57,6 +64,7 @@ def run_auto_grade(self, job_id: int):
             .filter(
                 Student.exam_id == exam.exam_id,
                 AnswerRegion.problem_id == problem.problem_id,
+                AnswerRegion.layout_mode == exam.layout_mode,
             )
             .all()
         )
@@ -83,9 +91,12 @@ def run_auto_grade(self, job_id: int):
         # expire_on_commit 영향을 받지 않도록 plain value로 추출
         problem_id = problem.problem_id
         max_score = problem.max_score
-        correct_answer = model_answer.model_answer_text
-        is_mc = problem.type == ProblemType.MULTIPLE_CHOICE
-        correct_choice = _parse_choice(correct_answer) if is_mc else None
+        correct_choice = model_answer.correct_choice if problem_type == ProblemType.MULTIPLE_CHOICE else None
+        accepted_answers = (
+            [_normalize_text(a) for a in model_answer.accepted_answers]
+            if problem_type == ProblemType.SHORT_ANSWER
+            else None
+        )
 
         succeeded = 0
         failed = 0
@@ -96,10 +107,10 @@ def run_auto_grade(self, job_id: int):
 
         for index, t in enumerate(targets, start=1):
             try:
-                if is_mc:
+                if problem_type == ProblemType.MULTIPLE_CHOICE:
                     correct = (t["marked_choice"] is not None and t["marked_choice"] == correct_choice)
-                else:
-                    correct = _normalize_text(t["text"] or "") == _normalize_text(correct_answer)
+                else:  # SHORT_ANSWER
+                    correct = _normalize_text(t["text"] or "") in accepted_answers
 
                 score = max_score if correct else 0
 
@@ -174,6 +185,7 @@ def run_llm_grade(self, job_id: int):
     from app.enums.grade_method import GradeMethod
     from app.enums.grade_status import GradeStatus
     from app.enums.job_status import JobStatus
+    from app.enums.problem_type import ProblemType
     from app.models.answer_region import AnswerRegion
     from app.models.answer_sheet import AnswerSheet
     from app.models.grade import Grade
@@ -194,6 +206,9 @@ def run_llm_grade(self, job_id: int):
 
         problem = job.problem
         exam = job.exam
+
+        if problem.type not in (ProblemType.DESCRIPTIVE, ProblemType.CODING):
+            raise ValueError("LLM 채점은 서술형/손코딩 문제에만 지원됩니다.")
 
         model_answer = (
             db.query(ModelAnswer)
@@ -231,6 +246,7 @@ def run_llm_grade(self, job_id: int):
             .filter(
                 Student.exam_id == exam.exam_id,
                 AnswerRegion.problem_id == problem.problem_id,
+                AnswerRegion.layout_mode == exam.layout_mode,
             )
             .all()
         )
@@ -413,11 +429,11 @@ def _call_claude_for_grade(
 {student_answer}
 
 각 채점 기준에 대해 학생 답안이 충족하는지 판단하고, 종합 피드백을 작성해주세요.
-한국어로 작성해주세요."""
+한국어로 작성해주세요. 종합 피드백은 학생이 감점된 이유만 300자 이내로 작성해주세요."""
 
     with client.messages.stream(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=16000,
         thinking={"type": "adaptive"},
         output_config={
             "format": {
