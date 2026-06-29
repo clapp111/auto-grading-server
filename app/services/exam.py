@@ -1,9 +1,9 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamAlreadyAtMaxStepError, ExamNotFoundError
+from app.core.exceptions import ExamNotFoundError
 from app.db.session import get_db
-from app.enums.exam_step import ExamStep
+
 from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
@@ -99,13 +99,11 @@ class ExamService:
         for key in s3_keys:
             self.storage.delete(key)
 
-    def advance_step(self, exam_id: int, member_id: int) -> ExamResponse:
+    def advance_step(self, exam_id: int, member_id: int, from_step: int) -> ExamResponse:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
-        if exam.step >= ExamStep.MAX:
-            raise ExamAlreadyAtMaxStepError()
-        exam = self.repo.update(exam, step=exam.step + 1)
+        exam = self.repo.update(exam, step=from_step + 1)
         return self._to_response(exam)
 
 

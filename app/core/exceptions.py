@@ -25,5 +25,3 @@ class OcrResultNotFoundError(Exception): pass
 class StudentNotFoundError(Exception): pass
 
 class GradeNotFoundError(Exception): pass
-
-class ExamAlreadyAtMaxStepError(Exception): pass

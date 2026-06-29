@@ -5,7 +5,7 @@ from app.core.security import get_current_member
 from app.models.member import Member
 from app.schemas.answer_region import AnswerRegionResponse, RegionTemplateRequest
 from app.schemas.common import ApiResponse, CursorMeta
-from app.schemas.exam import ExamCreateRequest, ExamResponse, ExamUpdateRequest
+from app.schemas.exam import ExamAdvanceRequest, ExamCreateRequest, ExamResponse, ExamUpdateRequest
 from app.schemas.job import JobStartedResponse
 from app.services.exam import ExamService, get_exam_service
 from app.services.region import RegionService, get_region_service
@@ -77,10 +77,11 @@ async def save_region_template(
 @router.post("/{exam_id}/advance", response_model=ApiResponse[ExamResponse])
 async def advance_exam_step(
     exam_id: int,
+    request: ExamAdvanceRequest,
     current_member: Member = Depends(get_current_member),
     service: ExamService = Depends(get_exam_service),
 ) -> ApiResponse[ExamResponse]:
-    return ApiResponse(data=service.advance_step(exam_id, current_member.member_id))
+    return ApiResponse(data=service.advance_step(exam_id, current_member.member_id, request.from_step))
 
 
 @router.post("/{exam_id}/regions/apply-template", status_code=202, response_model=ApiResponse[JobStartedResponse])

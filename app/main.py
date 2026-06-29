@@ -8,7 +8,6 @@ from app.core.exceptions import (
     AnswerRegionNotFoundError,
     AnswerSheetNotFoundError,
     EmailAlreadyExistsError,
-    ExamAlreadyAtMaxStepError,
     ExamNotFoundError,
     GradeNotFoundError,
     InvalidCredentialsError,
@@ -149,13 +148,6 @@ async def grade_not_found_handler(request: Request, exc: GradeNotFoundError) -> 
         content={"data": None, "meta": None, "error": {"code": "GRADE_NOT_FOUND", "message": "채점 결과를 찾을 수 없습니다."}},
     )
 
-
-@app.exception_handler(ExamAlreadyAtMaxStepError)
-async def exam_already_at_max_step_handler(request: Request, exc: ExamAlreadyAtMaxStepError) -> JSONResponse:
-    return JSONResponse(
-        status_code=409,
-        content={"data": None, "meta": None, "error": {"code": "EXAM_ALREADY_AT_MAX_STEP", "message": "이미 마지막 단계입니다."}},
-    )
 
 
 @app.get("/health")

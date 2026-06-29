@@ -23,6 +23,10 @@ class ExamUpdateRequest(BaseModel):
     layout_mode: LayoutMode | None = None
 
 
+class ExamAdvanceRequest(BaseModel):
+    from_step: int = Field(ge=0, le=6)
+
+
 class ExamResponse(BaseModel):
     exam_id: int
     name: str
