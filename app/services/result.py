@@ -91,7 +91,7 @@ class ResultService:
 
         return ExamResultResponse(
             exam_id=exam.exam_id,
-            title=exam.title,
+            title=exam.name,    # DB에는 name 컬럼이지만, API 스펙에서는 title로 노출
             problems=problem_headers,
             students=student_items,
         )

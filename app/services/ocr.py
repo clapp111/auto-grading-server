@@ -100,6 +100,8 @@ class OcrService:
                 if search in item.name or search in item.student_no
             ]
 
+        all_items.sort(key=lambda x: x.student_no)
+
         return OcrProgressResponse(
             confirmed_student_count=confirmed_student_count,
             total_student_count=len(matched_sheets),

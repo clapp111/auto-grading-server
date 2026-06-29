@@ -74,6 +74,7 @@ class AnswerSheetService:
     def list_answer_sheets(self, exam_id: int, member_id: int) -> list[AnswerSheetResponse]:
         self._get_exam_or_raise(exam_id, member_id)
         sheets = self.answer_sheet_repo.list_by_exam(exam_id)
+        sheets.sort(key=lambda x: x.student.student_no if x.student else "")
         return [_to_response(s) for s in sheets]
 
     def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
