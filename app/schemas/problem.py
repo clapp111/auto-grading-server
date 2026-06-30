@@ -17,6 +17,8 @@ class ProblemUpdateRequest(BaseModel):
     type: ProblemType | None = None
     max_score: int | None = Field(default=None, ge=0)
     region: Region | None = None
+    problem_text: str | None = None
+    language: ProgrammingLanguage | None = None
 
 
 class ProblemResponse(BaseModel):

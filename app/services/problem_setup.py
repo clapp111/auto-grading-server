@@ -11,6 +11,7 @@ from app.models.problem import Problem
 from app.repositories.exam import ExamRepository
 from app.repositories.job import JobRepository
 from app.repositories.problem import ProblemRepository
+from app.schemas.job import JobStartedResponse
 from app.schemas.problem import ProblemCreateRequest, ProblemResponse, ProblemUpdateRequest
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 
@@ -94,6 +95,24 @@ class ProblemSetupService:
             run_problem_ocr.delay(job.job_id)
 
         return ProblemResponse.model_validate(problem)
+
+    def run_problem_ocr(self, problem_id: int, member_id: int) -> JobStartedResponse:
+        from app.workers.ocr_tasks import run_problem_ocr
+
+        problem = self._get_problem_or_raise(problem_id, member_id)
+
+        job = self.job_repo.create(
+            exam_id=problem.exam_id,
+            type=JobType.PROBLEM_OCR,
+            requested_by_member_id=member_id,
+            problem_id=problem_id,
+            input_json={
+                "scope": {"problemIds": [problem_id]},
+                "source": {"trigger": "api", "endpoint": f"/api/v1/problems/{problem_id}/ocr"},
+            },
+        )
+        run_problem_ocr.delay(job.job_id)
+        return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def list_problems(self, exam_id: int, member_id: int) -> list[ProblemResponse]:
         self._get_exam_or_raise(exam_id, member_id)
