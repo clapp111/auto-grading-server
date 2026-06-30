@@ -319,12 +319,15 @@ def run_answer_ocr(self, job_id: int):
         scope = job.input_json or {}
         scope_layout_mode = ((scope.get("scope") or {}).get("layoutMode"))
         layout_mode = LayoutMode(scope_layout_mode) if scope_layout_mode else exam.layout_mode
+        sheet_filter = [
+            AnswerSheet.exam_id == exam.exam_id,
+            AnswerSheet.student_id.isnot(None),
+        ]
+        if job.answer_sheet_id is not None:
+            sheet_filter.append(AnswerSheet.answer_sheet_id == job.answer_sheet_id)
         sheets = (
             db.query(AnswerSheet)
-            .filter(
-                AnswerSheet.exam_id == exam.exam_id,
-                AnswerSheet.student_id.isnot(None),
-            )
+            .filter(*sheet_filter)
             .order_by(AnswerSheet.answer_sheet_id)
             .all()
         )

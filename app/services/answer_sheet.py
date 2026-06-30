@@ -144,6 +144,22 @@ class AnswerSheetService:
         run_student_id_ocr.delay(job.job_id)
         return UploadCompleteResponse(answer_sheet_id=answer_sheet_id, job_id=job.job_id)
 
+    def run_answer_sheet_ocr(self, answer_sheet_id: int, member_id: int) -> JobStartedResponse:
+        from app.workers.ocr_tasks import run_answer_ocr
+
+        sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
+        job = self.job_repo.create(
+            exam_id=sheet.exam_id,
+            type=JobType.ANSWER_OCR_RUN,
+            requested_by_member_id=member_id,
+            answer_sheet_id=answer_sheet_id,
+            input_json={
+                "source": {"trigger": "api", "endpoint": f"/api/v1/answer-sheets/{answer_sheet_id}/ocr"},
+            },
+        )
+        run_answer_ocr.delay(job.job_id)
+        return JobStartedResponse(job_id=job.job_id, status=job.status)
+
     def patch_answer_sheet(self, answer_sheet_id: int, member_id: int, request: AnswerSheetPatchRequest) -> AnswerSheetResponse:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
 

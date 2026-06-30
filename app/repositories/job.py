@@ -21,6 +21,7 @@ class JobRepository:
         type: JobType,
         requested_by_member_id: int,
         problem_id: int | None = None,
+        answer_sheet_id: int | None = None,
         input_json: dict | None = None,
         idempotency_key: str | None = None,
     ) -> Job:
@@ -29,6 +30,7 @@ class JobRepository:
             type=type,
             requested_by_member_id=requested_by_member_id,
             problem_id=problem_id,
+            answer_sheet_id=answer_sheet_id,
             status=JobStatus.PENDING,
             input_json=input_json,
             idempotency_key=idempotency_key,

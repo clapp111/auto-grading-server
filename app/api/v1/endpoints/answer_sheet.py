@@ -75,6 +75,15 @@ async def get_download_url(
     return ApiResponse(data=service.get_download_url(answer_sheet_id, current_member.member_id))
 
 
+@router.post("/answer-sheets/{answer_sheet_id}/ocr", status_code=202, response_model=ApiResponse[JobStartedResponse])
+async def run_answer_sheet_ocr(
+    answer_sheet_id: int,
+    current_member: Member = Depends(get_current_member),
+    service: AnswerSheetService = Depends(get_answer_sheet_service),
+) -> ApiResponse[JobStartedResponse]:
+    return ApiResponse(data=service.run_answer_sheet_ocr(answer_sheet_id, current_member.member_id))
+
+
 @router.patch("/answer-sheets/{answer_sheet_id}", response_model=ApiResponse[AnswerSheetResponse])
 async def patch_answer_sheet(
     answer_sheet_id: int,

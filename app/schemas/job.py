@@ -16,6 +16,7 @@ class JobResponse(BaseModel):
     job_id: int
     exam_id: int
     problem_id: int | None
+    answer_sheet_id: int | None
     requested_by_member_id: int
     retry_of_job_id: int | None
 

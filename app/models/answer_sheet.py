@@ -7,9 +7,10 @@ from app.db.base import Base
 from app.enums.sheet_status import SheetStatus
 
 if TYPE_CHECKING:
-    from app.models.exam import Exam
-    from app.models.student import Student
     from app.models.answer_region import AnswerRegion
+    from app.models.exam import Exam
+    from app.models.job import Job
+    from app.models.student import Student
 
 
 class AnswerSheet(Base):
@@ -29,3 +30,4 @@ class AnswerSheet(Base):
     exam: Mapped["Exam"] = relationship(back_populates="answer_sheets")
     student: Mapped["Student | None"] = relationship(back_populates="answer_sheet")
     answer_regions: Mapped[list["AnswerRegion"]] = relationship(back_populates="answer_sheet")
+    jobs: Mapped[list["Job"]] = relationship(back_populates="answer_sheet")

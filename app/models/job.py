@@ -11,6 +11,7 @@ from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
 
 if TYPE_CHECKING:
+    from app.models.answer_sheet import AnswerSheet
     from app.models.exam import Exam
     from app.models.member import Member
     from app.models.problem import Problem
@@ -23,6 +24,7 @@ class Job(Base):
     job_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
     problem_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("problem.problem_id"), nullable=True)
+    answer_sheet_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("answer_sheet.answer_sheet_id"), nullable=True)
     requested_by_member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id"), nullable=False)
     retry_of_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("job.job_id"), nullable=True)
 
@@ -56,5 +58,6 @@ class Job(Base):
 
     exam: Mapped["Exam"] = relationship(back_populates="jobs")
     problem: Mapped["Problem | None"] = relationship(back_populates="jobs")
+    answer_sheet: Mapped["AnswerSheet | None"] = relationship(back_populates="jobs")
     requested_by: Mapped["Member"] = relationship(foreign_keys=[requested_by_member_id])
     retry_of: Mapped["Job | None"] = relationship(remote_side=[job_id])
