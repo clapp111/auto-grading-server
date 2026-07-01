@@ -7,6 +7,7 @@ from app.enums.job_type import JobType
 from app.enums.rubric_source import RubricSource
 from app.models.rubric import Rubric
 from app.repositories.exam import ExamRepository
+from app.repositories.grade import GradeRepository
 from app.repositories.job import JobRepository
 from app.repositories.problem import ProblemRepository
 from app.repositories.rubric import RubricRepository
@@ -26,11 +27,13 @@ class RubricService:
         problem_repo: ProblemRepository,
         exam_repo: ExamRepository,
         job_repo: JobRepository,
+        grade_repo: GradeRepository,
     ):
         self.rubric_repo = rubric_repo
         self.problem_repo = problem_repo
         self.exam_repo = exam_repo
         self.job_repo = job_repo
+        self.grade_repo = grade_repo
 
     def _get_problem_or_raise(self, problem_id: int, member_id: int):
         problem = self.problem_repo.get_by_id(problem_id)
@@ -59,6 +62,7 @@ class RubricService:
     def save_rubric(self, problem_id: int, member_id: int, request: RubricSaveRequest) -> list[RubricResponse]:
         self._get_problem_or_raise(problem_id, member_id)
         self.rubric_repo.delete_by_problem(problem_id)
+        self.grade_repo.delete_by_problem(problem_id)
         criteria = [c.model_dump() for c in request.criteria]
         rubrics = self.rubric_repo.bulk_create(problem_id, criteria, RubricSource.HUMAN)
         return [RubricResponse.model_validate(r) for r in rubrics]
@@ -109,4 +113,5 @@ def get_rubric_service(db: Session = Depends(get_db)) -> RubricService:
         ProblemRepository(db),
         ExamRepository(db),
         JobRepository(db),
+        GradeRepository(db),
     )

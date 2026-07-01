@@ -74,6 +74,9 @@ def suggest_rubric_task(self, job_id: int):
         ]
         db.add_all(rubrics)
 
+        from app.models.grade import Grade
+        db.query(Grade).filter(Grade.problem_id == problem.problem_id).delete(synchronize_session=False)
+
         job.progress_json = _build_progress(3, 3, "DONE", "루브릭 추천이 완료되었습니다.")
         job.status = JobStatus.DONE
         job.completed_at = datetime.now(timezone.utc)
