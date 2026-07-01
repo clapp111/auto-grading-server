@@ -277,66 +277,90 @@ def run_llm_grade(self, job_id: int):
         job.progress_json = _build_progress(0, total, "GRADING", "LLM 채점을 시작합니다.")
         db.commit()
 
-        for index, t in enumerate(targets, start=1):
-            try:
-                result = _call_claude_for_grade(
-                    client=client,
-                    label=problem_label,
-                    problem_type=problem_type_value,
-                    max_score=max_score,
-                    model_answer_text=model_answer_text,
-                    rubric_data=rubric_data,
-                    student_answer=t["ocr_text"],
-                )
+        grade_results: dict[int, dict] = {}
+        grade_errors: dict[int, str] = {}
+        pending_retry: Exception | None = None
 
-                rubric_map = {r["rubric_id"]: r["allocated_score"] for r in rubric_data}
-                score = sum(
-                    rubric_map.get(r["rubric_id"], 0)
-                    for r in result["rubric_results"]
-                    if r["satisfied"]
-                )
-                breakdown = [
-                    {"rubric_id": r["rubric_id"], "satisfied": r["satisfied"]}
-                    for r in result["rubric_results"]
-                ]
+        def _grade_one(t: dict) -> tuple[int, dict]:
+            result = _call_claude_for_grade(
+                client=client,
+                label=problem_label,
+                problem_type=problem_type_value,
+                max_score=max_score,
+                model_answer_text=model_answer_text,
+                rubric_data=rubric_data,
+                student_answer=t["ocr_text"],
+            )
+            return t["student_id"], result
 
-                existing = (
-                    db.query(Grade)
-                    .filter(Grade.problem_id == problem_id, Grade.student_id == t["student_id"])
-                    .first()
-                )
-                if existing:
-                    existing.score = score
-                    existing.comment = result["comment"]
-                    existing.rubric_breakdown = breakdown
-                    existing.method = GradeMethod.LLM
-                    existing.status = GradeStatus.SUGGESTED
-                else:
-                    db.add(Grade(
-                        problem_id=problem_id,
-                        student_id=t["student_id"],
-                        score=score,
-                        comment=result["comment"],
-                        rubric_breakdown=breakdown,
-                        method=GradeMethod.LLM,
-                        status=GradeStatus.SUGGESTED,
-                    ))
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=min(total, 5)) as executor:
+            future_to_target = {executor.submit(_grade_one, t): t for t in targets}
+            completed = 0
+            for future in as_completed(future_to_target):
+                t = future_to_target[future]
+                completed += 1
+                try:
+                    student_id, result = future.result()
+                    grade_results[student_id] = result
+                except (anthropic.APIConnectionError, anthropic.RateLimitError) as e:
+                    if pending_retry is None:
+                        pending_retry = e
+                except Exception as e:
+                    grade_errors[t["student_id"]] = str(e)
 
-                succeeded += 1
-
-            except anthropic.APIConnectionError:
-                raise  # 외부 except로 전파 → self.retry() 호출
-
-            except anthropic.RateLimitError:
-                raise  # 외부 except로 전파 → self.retry() 호출
-
-            except Exception as e:
-                failed += 1
-                failed_targets.append({"studentId": t["student_id"], "reason": str(e)})
-
-            if index % max(1, total // 10) == 0 or index == total:
-                job.progress_json = _build_progress(index, total, "GRADING", f"{index}/{total} 답안을 채점 중입니다.")
+                job.progress_json = _build_progress(completed, total, "GRADING", f"{completed}/{total} 답안을 채점 중입니다.")
                 db.commit()
+
+        if pending_retry is not None:
+            raise pending_retry
+
+        rubric_map = {r["rubric_id"]: r["allocated_score"] for r in rubric_data}
+        for t in targets:
+            student_id = t["student_id"]
+            if student_id in grade_errors:
+                failed += 1
+                failed_targets.append({"studentId": student_id, "reason": grade_errors[student_id]})
+                continue
+            if student_id not in grade_results:
+                continue
+
+            result = grade_results[student_id]
+            score = sum(
+                rubric_map.get(r["rubric_id"], 0)
+                for r in result["rubric_results"]
+                if r["satisfied"]
+            )
+            breakdown = [
+                {"rubric_id": r["rubric_id"], "satisfied": r["satisfied"]}
+                for r in result["rubric_results"]
+            ]
+
+            existing = (
+                db.query(Grade)
+                .filter(Grade.problem_id == problem_id, Grade.student_id == student_id)
+                .first()
+            )
+            if existing:
+                existing.score = score
+                existing.comment = result["comment"]
+                existing.rubric_breakdown = breakdown
+                existing.method = GradeMethod.LLM
+                existing.status = GradeStatus.SUGGESTED
+            else:
+                db.add(Grade(
+                    problem_id=problem_id,
+                    student_id=student_id,
+                    score=score,
+                    comment=result["comment"],
+                    rubric_breakdown=breakdown,
+                    method=GradeMethod.LLM,
+                    status=GradeStatus.SUGGESTED,
+                ))
+
+            succeeded += 1
+
+        db.commit()
 
         job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
@@ -433,8 +457,7 @@ def _call_claude_for_grade(
 
     with client.messages.stream(
         model="claude-sonnet-4-6",
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
+        max_tokens=1024,
         output_config={
             "format": {
                 "type": "json_schema",
