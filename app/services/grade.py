@@ -132,6 +132,7 @@ class GradeService:
         else:
             run_auto_grade.delay(job.job_id)
 
+        self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def list_grades(self, problem_id: int, member_id: int) -> list[GradeResponse]:
@@ -150,6 +151,7 @@ class GradeService:
 
     def update_grade(self, grade_id: int, member_id: int, request: GradeUpdateRequest) -> GradeResponse:
         grade = self._get_grade_or_raise(grade_id, member_id)
+        exam_id = grade.problem.exam_id
         data = request.model_dump(exclude_unset=True)
         updates: dict = {"method": GradeMethod.HUMAN}
 
@@ -176,10 +178,12 @@ class GradeService:
         model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
         model_answer_text = model_answer.model_answer_text if model_answer else None
 
+        self.exam_repo.touch(exam_id)
         return _to_response(grade, rubrics, ocr_map.get(grade.student_id), model_answer_text)
 
     def confirm_grade(self, grade_id: int, member_id: int) -> GradeResponse:
         grade = self._get_grade_or_raise(grade_id, member_id)
+        exam_id = grade.problem.exam_id
         self.grade_repo.update(grade, status=GradeStatus.CONFIRMED)
         grade = self.grade_repo.get_by_id(grade_id)
 
@@ -188,11 +192,14 @@ class GradeService:
         model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
         model_answer_text = model_answer.model_answer_text if model_answer else None
 
+        self.exam_repo.touch(exam_id)
         return _to_response(grade, rubrics, ocr_map.get(grade.student_id), model_answer_text)
 
     def confirm_all_grades(self, problem_id: int, member_id: int) -> GradeBulkConfirmResponse:
-        self._get_problem_or_raise(problem_id, member_id)
+        problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         confirmed_count = self.grade_repo.confirm_all(problem_id)
+        self.exam_repo.touch(exam_id)
         return GradeBulkConfirmResponse(confirmed_count=confirmed_count)
 
 

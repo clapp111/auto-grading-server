@@ -66,6 +66,7 @@ class OcrService:
             },
         )
         run_answer_ocr.delay(job.job_id)
+        self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def get_progress(self, exam_id: int, member_id: int, search: str | None) -> OcrProgressResponse:
@@ -121,18 +122,22 @@ class OcrService:
 
     def update_ocr_result(self, ocr_result_id: int, member_id: int, request: OcrResultUpdateRequest) -> OcrResultResponse:
         ocr_result = self._get_ocr_result_or_raise(ocr_result_id, member_id)
+        exam_id = ocr_result.answer_region.answer_sheet.exam_id
 
         updates = request.model_dump(exclude_unset=True)
         self.ocr_result_repo.update(ocr_result, **updates)
 
         ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
+        self.exam_repo.touch(exam_id)
         return _to_response(ocr_result)
 
     def confirm_ocr_result(self, ocr_result_id: int, member_id: int) -> OcrResultResponse:
         ocr_result = self._get_ocr_result_or_raise(ocr_result_id, member_id)
+        exam_id = ocr_result.answer_region.answer_sheet.exam_id
         self.ocr_result_repo.update(ocr_result, status=OCRStatus.REVIEWED)
 
         ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
+        self.exam_repo.touch(exam_id)
         return _to_response(ocr_result)
 
 

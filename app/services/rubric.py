@@ -60,15 +60,18 @@ class RubricService:
         return [RubricResponse.model_validate(r) for r in rubrics]
 
     def save_rubric(self, problem_id: int, member_id: int, request: RubricSaveRequest) -> list[RubricResponse]:
-        self._get_problem_or_raise(problem_id, member_id)
+        problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         self.rubric_repo.delete_by_problem(problem_id)
         self.grade_repo.delete_by_problem(problem_id)
         criteria = [c.model_dump() for c in request.criteria]
         rubrics = self.rubric_repo.bulk_create(problem_id, criteria, RubricSource.HUMAN)
+        self.exam_repo.touch(exam_id)
         return [RubricResponse.model_validate(r) for r in rubrics]
 
     def create_criterion(self, problem_id: int, member_id: int, request: RubricCreateRequest) -> RubricResponse:
-        self._get_problem_or_raise(problem_id, member_id)
+        problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         rubric = self.rubric_repo.create(
             problem_id=problem_id,
             text=request.text,
@@ -76,17 +79,24 @@ class RubricService:
             source=RubricSource.HUMAN,
             order_index=request.order_index,
         )
+        self.exam_repo.touch(exam_id)
         return RubricResponse.model_validate(rubric)
 
     def update_criterion(self, rubric_id: int, member_id: int, request: RubricUpdateRequest) -> RubricResponse:
         rubric = self._get_rubric_or_raise(rubric_id, member_id)
+        problem = self.problem_repo.get_by_id(rubric.problem_id)
+        exam_id = problem.exam_id
         updates = request.model_dump(exclude_unset=True)
         rubric = self.rubric_repo.update(rubric, **updates)
+        self.exam_repo.touch(exam_id)
         return RubricResponse.model_validate(rubric)
 
     def delete_criterion(self, rubric_id: int, member_id: int) -> None:
         rubric = self._get_rubric_or_raise(rubric_id, member_id)
+        problem = self.problem_repo.get_by_id(rubric.problem_id)
+        exam_id = problem.exam_id
         self.rubric_repo.delete(rubric)
+        self.exam_repo.touch(exam_id)
 
     def suggest_rubric(self, problem_id: int, member_id: int) -> JobStartedResponse:
         from app.workers.rubric_tasks import suggest_rubric_task

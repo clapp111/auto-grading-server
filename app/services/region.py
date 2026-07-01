@@ -66,6 +66,7 @@ class RegionService:
         exam = self.exam_repo.get_by_id(sheet.exam_id)
         if not exam or exam.member_id != member_id:
             raise AnswerSheetNotFoundError()
+        exam_id = sheet.exam_id
 
         updates = {
             "problem_id": request.problem_id,
@@ -87,10 +88,13 @@ class RegionService:
                 **updates,
             )
         region = self.answer_region_repo.get_by_id(region.answer_region_id)
+        self.exam_repo.touch(exam_id)
         return _to_response(region)
 
     def update_region(self, answer_region_id: int, member_id: int, request: AnswerRegionUpdateRequest) -> AnswerRegionResponse:
         region = self._get_region_or_raise(answer_region_id, member_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        exam_id = sheet.exam_id
 
         updates = {}
         data = request.model_dump(exclude_unset=True)
@@ -105,11 +109,15 @@ class RegionService:
 
         self.answer_region_repo.update(region, **updates)
         region = self.answer_region_repo.get_by_id(answer_region_id)
+        self.exam_repo.touch(exam_id)
         return _to_response(region)
 
     def delete_region(self, answer_region_id: int, member_id: int) -> None:
         region = self._get_region_or_raise(answer_region_id, member_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        exam_id = sheet.exam_id
         self.answer_region_repo.delete(region)
+        self.exam_repo.touch(exam_id)
 
     def save_template(self, exam_id: int, member_id: int, request: RegionTemplateRequest) -> list[AnswerRegionResponse]:
         exam = self._get_exam_or_raise(exam_id, member_id)
@@ -132,6 +140,7 @@ class RegionService:
             )
 
         regions = self.answer_region_repo.list_by_answer_sheet(first_sheet.answer_sheet_id, exam.layout_mode)
+        self.exam_repo.touch(exam_id)
         return [_to_response(r) for r in regions]
 
     def apply_template(self, exam_id: int, member_id: int) -> JobStartedResponse:
@@ -149,6 +158,7 @@ class RegionService:
             },
         )
         apply_region_template.delay(job.job_id)
+        self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
 

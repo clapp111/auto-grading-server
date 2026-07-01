@@ -1,4 +1,4 @@
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update as sa_update
 from sqlalchemy.orm import Session
 
 from app.models.answer_region import AnswerRegion
@@ -57,6 +57,10 @@ class ExamRepository:
         self.db.commit()
         self.db.refresh(exam)
         return exam
+
+    def touch(self, exam_id: int) -> None:
+        self.db.execute(sa_update(Exam).where(Exam.exam_id == exam_id).values(updated_at=func.now()))
+        self.db.commit()
 
     def update(self, exam: Exam, **kwargs) -> Exam:
         for key, value in kwargs.items():

@@ -54,6 +54,7 @@ class ModelAnswerService:
         from app.workers.ocr_tasks import run_model_answer_ocr
 
         problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
 
         if request.language is not None:
             self.problem_repo.update(problem, language=request.language)
@@ -62,7 +63,7 @@ class ModelAnswerService:
         self.model_answer_repo.update(model_answer, region=request.region.model_dump())
 
         job = self.job_repo.create(
-            exam_id=problem.exam_id,
+            exam_id=exam_id,
             type=JobType.MODEL_ANSWER_OCR,
             requested_by_member_id=member_id,
             problem_id=problem_id,
@@ -72,6 +73,7 @@ class ModelAnswerService:
             },
         )
         run_model_answer_ocr.delay(job.job_id)
+        self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def list_model_answers(self, exam_id: int, member_id: int) -> list[ModelAnswerResponse]:
@@ -100,9 +102,11 @@ class ModelAnswerService:
 
     def update_model_answer(self, problem_id: int, member_id: int, request: ModelAnswerUpdateRequest) -> ModelAnswerResponse:
         problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         model_answer = self.model_answer_repo.get_or_create(problem_id)
         updates = _build_updates(problem.type, request)
         model_answer = self.model_answer_repo.update(model_answer, **updates)
+        self.exam_repo.touch(exam_id)
         return ModelAnswerResponse.model_validate(model_answer)
 
 

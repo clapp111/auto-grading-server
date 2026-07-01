@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from typing import TYPE_CHECKING
 
@@ -29,8 +29,8 @@ class Exam(Base):
     layout_mode: Mapped[LayoutMode] = mapped_column(SAEnum(LayoutMode), nullable=False, default=LayoutMode.FIXED)
     student_name_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     student_no_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
 
     member: Mapped["Member"] = relationship(back_populates="exams")
     problems: Mapped[list["Problem"]] = relationship(back_populates="exam")

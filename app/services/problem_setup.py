@@ -70,12 +70,14 @@ class ProblemSetupService:
             )
             run_problem_ocr.delay(job.job_id)
 
+        self.exam_repo.touch(exam_id)
         return ProblemResponse.model_validate(problem)
 
     def update_problem(self, problem_id: int, member_id: int, request: ProblemUpdateRequest) -> ProblemResponse:
         from app.workers.ocr_tasks import run_problem_ocr
 
         problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         updates = request.model_dump(exclude_unset=True)
         if "region" in updates:
             updates["region"] = request.region.model_dump() if request.region else None
@@ -83,7 +85,7 @@ class ProblemSetupService:
 
         if updates.get("region") is not None:
             job = self.job_repo.create(
-                exam_id=problem.exam_id,
+                exam_id=exam_id,
                 type=JobType.PROBLEM_OCR,
                 requested_by_member_id=member_id,
                 problem_id=problem_id,
@@ -94,15 +96,17 @@ class ProblemSetupService:
             )
             run_problem_ocr.delay(job.job_id)
 
+        self.exam_repo.touch(exam_id)
         return ProblemResponse.model_validate(problem)
 
     def run_problem_ocr(self, problem_id: int, member_id: int) -> JobStartedResponse:
         from app.workers.ocr_tasks import run_problem_ocr
 
         problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
 
         job = self.job_repo.create(
-            exam_id=problem.exam_id,
+            exam_id=exam_id,
             type=JobType.PROBLEM_OCR,
             requested_by_member_id=member_id,
             problem_id=problem_id,
@@ -112,6 +116,7 @@ class ProblemSetupService:
             },
         )
         run_problem_ocr.delay(job.job_id)
+        self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def list_problems(self, exam_id: int, member_id: int) -> list[ProblemResponse]:
@@ -121,7 +126,9 @@ class ProblemSetupService:
 
     def delete_problem(self, problem_id: int, member_id: int) -> None:
         problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
         self.problem_repo.delete(problem)
+        self.exam_repo.touch(exam_id)
 
 
 def get_problem_setup_service(
