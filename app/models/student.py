@@ -1,12 +1,7 @@
-from typing import TYPE_CHECKING
-
 from sqlalchemy import BigInteger, ForeignKey, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-
-if TYPE_CHECKING:
-    from app.models.exam import Exam
 
 
 class Student(Base):
@@ -17,5 +12,3 @@ class Student(Base):
     exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     student_no: Mapped[str] = mapped_column(String, nullable=False)
-
-    exam: Mapped["Exam"] = relationship(back_populates="students")

@@ -16,7 +16,7 @@ from app.schemas.problem import ProblemCreateRequest, ProblemResponse, ProblemUp
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 
 
-class ProblemSetupService:
+class ProblemService:
     def __init__(self, problem_repo: ProblemRepository, exam_repo: ExamRepository, job_repo: JobRepository, storage: StorageClient):
         self.problem_repo = problem_repo
         self.exam_repo = exam_repo
@@ -131,8 +131,8 @@ class ProblemSetupService:
         self.exam_repo.touch(exam_id)
 
 
-def get_problem_setup_service(
+def get_problem_service(
     db: Session = Depends(get_db),
     storage: StorageClient = Depends(get_storage),
-) -> ProblemSetupService:
-    return ProblemSetupService(ProblemRepository(db), ExamRepository(db), JobRepository(db), storage)
+) -> ProblemService:
+    return ProblemService(ProblemRepository(db), ExamRepository(db), JobRepository(db), storage)

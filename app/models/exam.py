@@ -1,18 +1,10 @@
 from datetime import datetime, timezone
 
-from typing import TYPE_CHECKING
-
 from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 from app.enums.layout_mode import LayoutMode
-
-if TYPE_CHECKING:
-    from app.models.member import Member
-    from app.models.problem import Problem
-    from app.models.student import Student
-    from app.models.answer_sheet import AnswerSheet
 
 
 class Exam(Base):
@@ -31,7 +23,3 @@ class Exam(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
 
-    member: Mapped["Member"] = relationship(back_populates="exams")
-    problems: Mapped[list["Problem"]] = relationship(back_populates="exam")
-    students: Mapped[list["Student"]] = relationship(back_populates="exam")
-    answer_sheets: Mapped[list["AnswerSheet"]] = relationship(back_populates="exam")

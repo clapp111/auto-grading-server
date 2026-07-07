@@ -1,13 +1,9 @@
 from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 from app.enums.problem_type import ProblemType
 from app.enums.programming_language import ProgrammingLanguage
-
-if TYPE_CHECKING:
-    from app.models.exam import Exam
 
 
 class Problem(Base):
@@ -22,4 +18,3 @@ class Problem(Base):
     language: Mapped[ProgrammingLanguage | None] = mapped_column(SAEnum(ProgrammingLanguage), nullable=True)
     problem_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    exam: Mapped["Exam"] = relationship(back_populates="problems")
