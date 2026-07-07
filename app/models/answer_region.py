@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, JSON, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -19,4 +19,4 @@ class AnswerRegion(Base):
     bbox_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     polygon_points: Mapped[list | None] = mapped_column(JSON, nullable=True)
     layout_mode: Mapped[LayoutMode] = mapped_column(SAEnum(LayoutMode), nullable=False)
-    region_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    region_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

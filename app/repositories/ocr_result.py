@@ -50,20 +50,6 @@ class OcrResultRepository:
         )
         return {student_id: ocr_result for ocr_result, student_id in rows}
 
-    def delete_all_by_answer_sheet(self, answer_sheet_id: int, commit: bool = True) -> None:
-        region_ids = (
-            self.db.query(AnswerRegion.answer_region_id)
-            .filter(AnswerRegion.answer_sheet_id == answer_sheet_id)
-            .subquery()
-        )
-        (
-            self.db.query(OCRResult)
-            .filter(OCRResult.answer_region_id.in_(region_ids))
-            .delete(synchronize_session=False)
-        )
-        if commit:
-            self.db.commit()
-
     def update(self, ocr_result: OCRResult, **kwargs) -> OCRResult:
         kwargs.setdefault("updated_at", datetime.now(timezone.utc))
         for key, value in kwargs.items():

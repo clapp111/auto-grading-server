@@ -11,7 +11,7 @@ class Exam(Base):
     __tablename__ = "exam"
 
     exam_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id"), nullable=False)
+    member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     problem_sheet_file_key: Mapped[str | None] = mapped_column(String, nullable=True)

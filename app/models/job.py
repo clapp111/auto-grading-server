@@ -15,11 +15,11 @@ class Job(Base):
 
     # 식별 / 관계
     job_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
-    problem_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("problem.problem_id"), nullable=True)
-    answer_sheet_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("answer_sheet.answer_sheet_id"), nullable=True)
-    requested_by_member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id"), nullable=False)
-    retry_of_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("job.job_id"), nullable=True)
+    exam_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("exam.exam_id", ondelete="SET NULL"), nullable=True)
+    problem_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("problem.problem_id", ondelete="SET NULL"), nullable=True)
+    answer_sheet_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("answer_sheet.answer_sheet_id", ondelete="SET NULL"), nullable=True)
+    requested_by_member_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("member.member_id", ondelete="SET NULL"), nullable=True)
+    retry_of_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("job.job_id", ondelete="SET NULL"), nullable=True)
 
     # 유형 / 상태
     type: Mapped[JobType] = mapped_column(SAEnum(JobType), nullable=False)

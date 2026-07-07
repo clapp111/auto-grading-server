@@ -10,7 +10,7 @@ class Problem(Base):
     __tablename__ = "problem"
 
     problem_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
+    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id", ondelete="CASCADE"), nullable=False)
     label: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[ProblemType] = mapped_column(SAEnum(ProblemType), nullable=False)
     max_score: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, Text
+from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -15,4 +15,4 @@ class OCRResult(Base):
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     marked_choice: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[OCRStatus] = mapped_column(SAEnum(OCRStatus), nullable=False, default=OCRStatus.RAW)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

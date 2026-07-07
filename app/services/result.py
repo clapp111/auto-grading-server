@@ -192,6 +192,7 @@ class ResultService:
 
         grades = self.result_repo.list_grades_by_student_exam(student_id, exam_id)
         problems = self.problem_repo.list_by_exam(exam_id)
+        problem_map = {p.problem_id: p for p in problems}
         max_total_score = sum(p.max_score for p in problems)
         total_score = sum(g.score for g in grades if g.status == GradeStatus.CONFIRMED)
 
@@ -205,8 +206,9 @@ class ResultService:
         for grade in grades:
             rubrics = self.rubric_repo.list_by_problem(grade.problem_id)
             ma = model_answer_map.get(grade.problem_id)
+            problem = problem_map[grade.problem_id]
             grade_responses.append(
-                _to_response(grade, rubrics, ocr_map.get(grade.problem_id), ma.model_answer_text if ma else None)
+                _to_response(grade, student.name, student.student_no, problem.max_score, rubrics, ocr_map.get(grade.problem_id), ma.model_answer_text if ma else None)
             )
 
         return StudentDetailResultResponse(
