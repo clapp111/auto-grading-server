@@ -8,7 +8,6 @@ from app.enums.programming_language import ProgrammingLanguage
 
 if TYPE_CHECKING:
     from app.models.exam import Exam
-    from app.models.job import Job
 
 
 class Problem(Base):
@@ -24,4 +23,3 @@ class Problem(Base):
     problem_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     exam: Mapped["Exam"] = relationship(back_populates="problems")
-    jobs: Mapped[list["Job"]] = relationship(back_populates="problem")

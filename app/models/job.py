@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
-
-if TYPE_CHECKING:
-    from app.models.answer_sheet import AnswerSheet
-    from app.models.exam import Exam
-    from app.models.member import Member
-    from app.models.problem import Problem
 
 
 class Job(Base):
@@ -56,8 +49,3 @@ class Job(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
 
-    exam: Mapped["Exam"] = relationship(back_populates="jobs")
-    problem: Mapped["Problem | None"] = relationship(back_populates="jobs")
-    answer_sheet: Mapped["AnswerSheet | None"] = relationship(back_populates="jobs")
-    requested_by: Mapped["Member"] = relationship(foreign_keys=[requested_by_member_id])
-    retry_of: Mapped["Job | None"] = relationship(remote_side=[job_id])

@@ -22,10 +22,12 @@ def run_auto_grade(self, job_id: int):
     from app.enums.problem_type import ProblemType
     from app.models.answer_region import AnswerRegion
     from app.models.answer_sheet import AnswerSheet
+    from app.models.exam import Exam
     from app.models.grade import Grade
     from app.models.job import Job
     from app.models.model_answer import ModelAnswer
     from app.models.ocr_result import OCRResult
+    from app.models.problem import Problem
     from app.models.student import Student
 
     db = SessionLocal()
@@ -37,8 +39,8 @@ def run_auto_grade(self, job_id: int):
         job.progress_json = _build_progress(0, 0, "PREPARING", "자동 채점을 준비 중입니다.")
         db.commit()
 
-        problem = job.problem
-        exam = job.exam
+        problem = db.get(Problem, job.problem_id)
+        exam = db.get(Exam, job.exam_id)
 
         model_answer = (
             db.query(ModelAnswer)
@@ -188,10 +190,12 @@ def run_llm_grade(self, job_id: int):
     from app.enums.problem_type import ProblemType
     from app.models.answer_region import AnswerRegion
     from app.models.answer_sheet import AnswerSheet
+    from app.models.exam import Exam
     from app.models.grade import Grade
     from app.models.job import Job
     from app.models.model_answer import ModelAnswer
     from app.models.ocr_result import OCRResult
+    from app.models.problem import Problem
     from app.models.rubric import Rubric
     from app.models.student import Student
 
@@ -204,8 +208,8 @@ def run_llm_grade(self, job_id: int):
         job.progress_json = _build_progress(0, 0, "PREPARING", "LLM 채점을 준비 중입니다.")
         db.commit()
 
-        problem = job.problem
-        exam = job.exam
+        problem = db.get(Problem, job.problem_id)
+        exam = db.get(Exam, job.exam_id)
 
         if problem.type not in (ProblemType.DESCRIPTIVE, ProblemType.CODING):
             raise ValueError("LLM 채점은 서술형/손코딩 문제에만 지원됩니다.")

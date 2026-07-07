@@ -13,7 +13,9 @@ def run_problem_ocr(self, job_id: int):
     from app.infrastructure.ocr.ocr_client import ClovaOcrClient
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
+    from app.models.exam import Exam
     from app.models.job import Job
+    from app.models.problem import Problem
     from app.schemas.common import Region
 
     db = SessionLocal()
@@ -25,8 +27,8 @@ def run_problem_ocr(self, job_id: int):
         job.progress_json = _build_progress(0, 1, "OCR", "문제 OCR을 시작합니다.")
         db.commit()
 
-        problem = job.problem
-        exam = job.exam
+        problem = db.get(Problem, job.problem_id)
+        exam = db.get(Exam, job.exam_id)
 
         if not problem.region:
             raise ValueError("OCR 대상 region이 지정되지 않았습니다.")
@@ -74,8 +76,10 @@ def run_model_answer_ocr(self, job_id: int):
     from app.infrastructure.ocr.ocr_client import ClovaOcrClient
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
+    from app.models.exam import Exam
     from app.models.job import Job
     from app.models.model_answer import ModelAnswer
+    from app.models.problem import Problem
     from app.schemas.common import Region
 
     db = SessionLocal()
@@ -87,8 +91,8 @@ def run_model_answer_ocr(self, job_id: int):
         job.progress_json = _build_progress(0, 1, "OCR", "모범답안 OCR을 시작합니다.")
         db.commit()
 
-        problem = job.problem
-        exam = job.exam
+        problem = db.get(Problem, job.problem_id)
+        exam = db.get(Exam, job.exam_id)
         model_answer = db.query(ModelAnswer).filter(ModelAnswer.problem_id == problem.problem_id).first()
 
         if not model_answer or not model_answer.region:
@@ -139,6 +143,7 @@ def run_student_id_ocr(self, job_id: int):
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
     from app.models.answer_sheet import AnswerSheet
+    from app.models.exam import Exam
     from app.models.job import Job
     from app.models.student import Student
     from app.schemas.common import Region
@@ -152,7 +157,7 @@ def run_student_id_ocr(self, job_id: int):
         job.progress_json = _build_progress(0, 0, "PREPARING", "학생 식별 OCR을 준비 중입니다.")
         db.commit()
 
-        exam = job.exam
+        exam = db.get(Exam, job.exam_id)
         if not exam.student_name_region or not exam.student_no_region:
             raise ValueError("학생 식별 영역이 지정되지 않았습니다.")
 
@@ -302,6 +307,7 @@ def run_answer_ocr(self, job_id: int):
     from app.infrastructure.storage.deps import get_storage
     from app.models.answer_region import AnswerRegion
     from app.models.answer_sheet import AnswerSheet
+    from app.models.exam import Exam
     from app.models.job import Job
     from app.models.ocr_result import OCRResult
     from app.models.problem import Problem
@@ -316,7 +322,7 @@ def run_answer_ocr(self, job_id: int):
         job.progress_json = _build_progress(0, 0, "PREPARING", "답안 OCR을 준비 중입니다.")
         db.commit()
 
-        exam = job.exam
+        exam = db.get(Exam, job.exam_id)
         scope = job.input_json or {}
         scope_layout_mode = ((scope.get("scope") or {}).get("layoutMode"))
         layout_mode = LayoutMode(scope_layout_mode) if scope_layout_mode else exam.layout_mode

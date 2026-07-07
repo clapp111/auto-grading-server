@@ -8,7 +8,6 @@ from app.enums.sheet_status import SheetStatus
 
 if TYPE_CHECKING:
     from app.models.exam import Exam
-    from app.models.job import Job
 
 
 class AnswerSheet(Base):
@@ -25,4 +24,3 @@ class AnswerSheet(Base):
     status: Mapped[SheetStatus] = mapped_column(SAEnum(SheetStatus), nullable=False, default=SheetStatus.UNMATCHED)
 
     exam: Mapped["Exam"] = relationship(back_populates="answer_sheets")
-    jobs: Mapped[list["Job"]] = relationship(back_populates="answer_sheet")

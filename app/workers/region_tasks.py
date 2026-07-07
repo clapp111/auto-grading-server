@@ -11,6 +11,7 @@ def apply_region_template(self, job_id: int):
     from app.enums.job_status import JobStatus
     from app.models.answer_region import AnswerRegion
     from app.models.answer_sheet import AnswerSheet
+    from app.models.exam import Exam
     from app.models.job import Job
 
     db = SessionLocal()
@@ -22,7 +23,7 @@ def apply_region_template(self, job_id: int):
         job.progress_json = _build_progress(0, 0, "PREPARING", "템플릿 적용을 준비 중입니다.")
         db.commit()
 
-        exam = job.exam
+        exam = db.get(Exam, job.exam_id)
         sheets = (
             db.query(AnswerSheet)
             .filter(AnswerSheet.exam_id == exam.exam_id)

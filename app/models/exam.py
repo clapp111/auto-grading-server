@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from app.models.problem import Problem
     from app.models.student import Student
     from app.models.answer_sheet import AnswerSheet
-    from app.models.job import Job
 
 
 class Exam(Base):
@@ -36,4 +35,3 @@ class Exam(Base):
     problems: Mapped[list["Problem"]] = relationship(back_populates="exam")
     students: Mapped[list["Student"]] = relationship(back_populates="exam")
     answer_sheets: Mapped[list["AnswerSheet"]] = relationship(back_populates="exam")
-    jobs: Mapped[list["Job"]] = relationship(back_populates="exam")
