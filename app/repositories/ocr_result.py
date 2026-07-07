@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
 from app.enums.ocr_status import OCRStatus
@@ -9,31 +9,18 @@ from app.models.answer_sheet import AnswerSheet
 from app.models.ocr_result import OCRResult
 
 
-def _with_relations():
-    return selectinload(OCRResult.answer_region).options(
-        selectinload(AnswerRegion.problem),
-        selectinload(AnswerRegion.answer_sheet),
-    )
-
-
 class OcrResultRepository:
     def __init__(self, db: Session):
         self.db = db
 
     def get_by_id(self, ocr_result_id: int) -> OCRResult | None:
-        return (
-            self.db.query(OCRResult)
-            .options(_with_relations())
-            .filter(OCRResult.ocr_result_id == ocr_result_id)
-            .first()
-        )
+        return self.db.get(OCRResult, ocr_result_id)
 
-    def list_by_student(self, student_id: int, layout_mode: LayoutMode | None = None) -> list[OCRResult]:
+    def list_by_student(self, student_id: int, layout_mode: LayoutMode | None = None) -> list[tuple[OCRResult, AnswerRegion]]:
         query = (
-            self.db.query(OCRResult)
+            self.db.query(OCRResult, AnswerRegion)
             .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
             .join(AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
-            .options(_with_relations())
             .filter(AnswerSheet.student_id == student_id)
             .order_by(AnswerRegion.problem_id)
         )

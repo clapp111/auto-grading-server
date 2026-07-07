@@ -5,11 +5,15 @@ from app.core.exceptions import ExamNotFoundError, OcrResultNotFoundError, Stude
 from app.db.session import get_db
 from app.enums.job_type import JobType
 from app.enums.ocr_status import OCRStatus
+from app.models.answer_region import AnswerRegion
 from app.models.ocr_result import OCRResult
+from app.models.problem import Problem
+from app.repositories.answer_region import AnswerRegionRepository
 from app.repositories.answer_sheet import AnswerSheetRepository
 from app.repositories.exam import ExamRepository
 from app.repositories.job import JobRepository
 from app.repositories.ocr_result import OcrResultRepository
+from app.repositories.problem import ProblemRepository
 from app.repositories.student import StudentRepository
 from app.schemas.common import Point, Region
 from app.schemas.job import JobStartedResponse
@@ -25,15 +29,19 @@ class OcrService:
     def __init__(
         self,
         ocr_result_repo: OcrResultRepository,
+        answer_region_repo: AnswerRegionRepository,
         answer_sheet_repo: AnswerSheetRepository,
         exam_repo: ExamRepository,
         student_repo: StudentRepository,
+        problem_repo: ProblemRepository,
         job_repo: JobRepository,
     ):
         self.ocr_result_repo = ocr_result_repo
+        self.answer_region_repo = answer_region_repo
         self.answer_sheet_repo = answer_sheet_repo
         self.exam_repo = exam_repo
         self.student_repo = student_repo
+        self.problem_repo = problem_repo
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
@@ -42,15 +50,16 @@ class OcrService:
             raise ExamNotFoundError()
         return exam
 
-    def _get_ocr_result_or_raise(self, ocr_result_id: int, member_id: int) -> OCRResult:
+    def _get_ocr_result_or_raise(self, ocr_result_id: int, member_id: int) -> tuple[OCRResult, AnswerRegion]:
         ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
         if not ocr_result:
             raise OcrResultNotFoundError()
-        sheet = ocr_result.answer_region.answer_sheet
+        region = self.answer_region_repo.get_by_id(ocr_result.answer_region_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
         exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id or ocr_result.answer_region.layout_mode != exam.layout_mode:
+        if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
             raise OcrResultNotFoundError()
-        return ocr_result
+        return ocr_result, region
 
     def run_ocr(self, exam_id: int, member_id: int) -> JobStartedResponse:
         from app.workers.ocr_tasks import run_answer_ocr
@@ -118,32 +127,35 @@ class OcrService:
             raise StudentNotFoundError()
 
         results = self.ocr_result_repo.list_by_student(student_id, exam.layout_mode)
-        return [_to_response(r) for r in results]
+        problem_map = self.problem_repo.map_by_ids([region.problem_id for _, region in results])
+        return [_to_response(ocr, region, problem_map[region.problem_id]) for ocr, region in results]
 
     def update_ocr_result(self, ocr_result_id: int, member_id: int, request: OcrResultUpdateRequest) -> OcrResultResponse:
-        ocr_result = self._get_ocr_result_or_raise(ocr_result_id, member_id)
-        exam_id = ocr_result.answer_region.answer_sheet.exam_id
+        ocr_result, region = self._get_ocr_result_or_raise(ocr_result_id, member_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        exam_id = sheet.exam_id
 
         updates = request.model_dump(exclude_unset=True)
         self.ocr_result_repo.update(ocr_result, **updates)
 
         ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
+        problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
-        return _to_response(ocr_result)
+        return _to_response(ocr_result, region, problem)
 
     def confirm_ocr_result(self, ocr_result_id: int, member_id: int) -> OcrResultResponse:
-        ocr_result = self._get_ocr_result_or_raise(ocr_result_id, member_id)
-        exam_id = ocr_result.answer_region.answer_sheet.exam_id
+        ocr_result, region = self._get_ocr_result_or_raise(ocr_result_id, member_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        exam_id = sheet.exam_id
         self.ocr_result_repo.update(ocr_result, status=OCRStatus.REVIEWED)
 
         ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
+        problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
-        return _to_response(ocr_result)
+        return _to_response(ocr_result, region, problem)
 
 
-def _to_response(ocr_result: OCRResult) -> OcrResultResponse:
-    region = ocr_result.answer_region
-    problem = region.problem
+def _to_response(ocr_result: OCRResult, region: AnswerRegion, problem: Problem) -> OcrResultResponse:
     return OcrResultResponse(
         ocr_result_id=ocr_result.ocr_result_id,
         problem_id=problem.problem_id,
@@ -163,8 +175,10 @@ def _to_response(ocr_result: OCRResult) -> OcrResultResponse:
 def get_ocr_service(db: Session = Depends(get_db)) -> OcrService:
     return OcrService(
         OcrResultRepository(db),
+        AnswerRegionRepository(db),
         AnswerSheetRepository(db),
         ExamRepository(db),
         StudentRepository(db),
+        ProblemRepository(db),
         JobRepository(db),
     )

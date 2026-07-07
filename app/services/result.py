@@ -195,13 +195,11 @@ class ResultService:
         max_total_score = sum(p.max_score for p in problems)
         total_score = sum(g.score for g in grades if g.status == GradeStatus.CONFIRMED)
 
-        # 배치 조회: model_answer N+1 방지
         problem_ids = [g.problem_id for g in grades]
         model_answer_map = self.model_answer_repo.map_by_problem_ids(problem_ids)
 
-        # 배치 조회: OCR N+1 방지
         ocr_results = self.ocr_result_repo.list_by_student(student_id)
-        ocr_map = {ocr.answer_region.problem_id: ocr for ocr in ocr_results}
+        ocr_map = {region.problem_id: ocr for ocr, region in ocr_results}
 
         grade_responses = []
         for grade in grades:

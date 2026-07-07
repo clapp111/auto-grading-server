@@ -11,7 +11,6 @@ from app.enums.region_shape import RegionShape
 if TYPE_CHECKING:
     from app.models.answer_sheet import AnswerSheet
     from app.models.problem import Problem
-    from app.models.ocr_result import OCRResult
 
 
 class AnswerRegion(Base):
@@ -29,4 +28,3 @@ class AnswerRegion(Base):
 
     answer_sheet: Mapped["AnswerSheet"] = relationship(back_populates="answer_regions")
     problem: Mapped["Problem"] = relationship(back_populates="answer_regions")
-    ocr_result: Mapped["OCRResult | None"] = relationship(back_populates="answer_region", uselist=False, cascade="all, delete-orphan")

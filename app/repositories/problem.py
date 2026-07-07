@@ -41,6 +41,10 @@ class ProblemRepository:
         self.db.refresh(problem)
         return problem
 
+    def map_by_ids(self, problem_ids: list[int]) -> dict[int, Problem]:
+        problems = self.db.query(Problem).filter(Problem.problem_id.in_(problem_ids)).all()
+        return {p.problem_id: p for p in problems}
+
     def delete(self, problem: Problem) -> None:
         self.db.delete(problem)
         self.db.commit()
