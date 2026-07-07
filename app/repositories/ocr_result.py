@@ -1,3 +1,4 @@
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
@@ -37,6 +38,27 @@ class OcrResultRepository:
         total = base.count()
         confirmed = base.filter(OCRResult.status == OCRStatus.REVIEWED).count()
         return total, confirmed
+
+    def count_by_answer_sheets(
+        self,
+        answer_sheet_ids: list[int],
+        layout_mode: LayoutMode | None = None,
+    ) -> dict[int, tuple[int, int]]:
+        if not answer_sheet_ids:
+            return {}
+        query = (
+            self.db.query(
+                AnswerRegion.answer_sheet_id,
+                func.count(OCRResult.ocr_result_id),
+                func.count(case((OCRResult.status == OCRStatus.REVIEWED, OCRResult.ocr_result_id))),
+            )
+            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
+            .filter(AnswerRegion.answer_sheet_id.in_(answer_sheet_ids))
+        )
+        if layout_mode is not None:
+            query = query.filter(AnswerRegion.layout_mode == layout_mode)
+        rows = query.group_by(AnswerRegion.answer_sheet_id).all()
+        return {sheet_id: (total, confirmed) for sheet_id, total, confirmed in rows}
 
     def map_by_problem(self, problem_id: int) -> dict[int, OCRResult]:
         rows = (

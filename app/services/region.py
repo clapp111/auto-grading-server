@@ -47,6 +47,8 @@ class RegionService:
         if not region:
             raise AnswerRegionNotFoundError()
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        if not sheet:
+            raise AnswerRegionNotFoundError()
         exam = self.exam_repo.get_by_id(sheet.exam_id)
         if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
             raise AnswerRegionNotFoundError()
@@ -91,7 +93,6 @@ class RegionService:
                 layout_mode=exam.layout_mode,
                 **updates,
             )
-        region = self.answer_region_repo.get_by_id(region.answer_region_id)
         problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
         return _to_response(region, problem.label)
@@ -101,19 +102,8 @@ class RegionService:
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
         exam_id = sheet.exam_id
 
-        updates = {}
-        data = request.model_dump(exclude_unset=True)
-        if "problem_id" in data:
-            updates["problem_id"] = data["problem_id"]
-        if "shape" in data:
-            updates["shape"] = data["shape"]
-        if "bbox_region" in data:
-            updates["bbox_region"] = data["bbox_region"]
-        if "polygon_points" in data:
-            updates["polygon_points"] = data["polygon_points"]
-
-        self.answer_region_repo.update(region, **updates)
-        region = self.answer_region_repo.get_by_id(answer_region_id)
+        updates = request.model_dump(exclude_unset=True)
+        region = self.answer_region_repo.update(region, **updates)
         problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
         return _to_response(region, problem.label)

@@ -55,7 +55,11 @@ class OcrService:
         if not ocr_result:
             raise OcrResultNotFoundError()
         region = self.answer_region_repo.get_by_id(ocr_result.answer_region_id)
+        if not region:
+            raise OcrResultNotFoundError()
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        if not sheet:
+            raise OcrResultNotFoundError()
         exam = self.exam_repo.get_by_id(sheet.exam_id)
         if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
             raise OcrResultNotFoundError()
@@ -88,9 +92,10 @@ class OcrService:
         all_items: list[StudentOcrProgressItem] = []
         confirmed_student_count = 0
 
+        count_map = self.ocr_result_repo.count_by_answer_sheets([s.answer_sheet_id for s in matched_sheets], exam.layout_mode)
         for sheet in matched_sheets:
             student = student_map[sheet.student_id]
-            total, confirmed = self.ocr_result_repo.count_by_answer_sheet(sheet.answer_sheet_id, exam.layout_mode)
+            total, confirmed = count_map.get(sheet.answer_sheet_id, (0, 0))
             percent = (confirmed * 100 // total) if total > 0 else 0
 
             if total > 0 and confirmed == total:
@@ -131,29 +136,23 @@ class OcrService:
         problem_map = self.problem_repo.map_by_ids([region.problem_id for _, region in results])
         return [_to_response(ocr, region, problem_map[region.problem_id]) for ocr, region in results]
 
-    def update_ocr_result(self, ocr_result_id: int, member_id: int, request: OcrResultUpdateRequest) -> OcrResultResponse:
-        ocr_result, region = self._get_ocr_result_or_raise(ocr_result_id, member_id)
-        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
-        exam_id = sheet.exam_id
-
-        updates = request.model_dump(exclude_unset=True)
-        self.ocr_result_repo.update(ocr_result, **updates)
-
-        ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
+    def _build_ocr_response(self, ocr_result: OCRResult, region: AnswerRegion, exam_id: int) -> OcrResultResponse:
         problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
         return _to_response(ocr_result, region, problem)
+
+    def update_ocr_result(self, ocr_result_id: int, member_id: int, request: OcrResultUpdateRequest) -> OcrResultResponse:
+        ocr_result, region = self._get_ocr_result_or_raise(ocr_result_id, member_id)
+        sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
+        updates = request.model_dump(exclude_unset=True)
+        ocr_result = self.ocr_result_repo.update(ocr_result, **updates)
+        return self._build_ocr_response(ocr_result, region, sheet.exam_id)
 
     def confirm_ocr_result(self, ocr_result_id: int, member_id: int) -> OcrResultResponse:
         ocr_result, region = self._get_ocr_result_or_raise(ocr_result_id, member_id)
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
-        exam_id = sheet.exam_id
-        self.ocr_result_repo.update(ocr_result, status=OCRStatus.REVIEWED)
-
-        ocr_result = self.ocr_result_repo.get_by_id(ocr_result_id)
-        problem = self.problem_repo.get_by_id(region.problem_id)
-        self.exam_repo.touch(exam_id)
-        return _to_response(ocr_result, region, problem)
+        ocr_result = self.ocr_result_repo.update(ocr_result, status=OCRStatus.REVIEWED)
+        return self._build_ocr_response(ocr_result, region, sheet.exam_id)
 
 
 def _to_response(ocr_result: OCRResult, region: AnswerRegion, problem: Problem) -> OcrResultResponse:

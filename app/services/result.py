@@ -187,7 +187,7 @@ class ResultService:
         return content, filename
 
     def get_student_result(self, student_id: int, exam_id: int, member_id: int) -> StudentDetailResultResponse:
-        self._get_exam_or_raise(exam_id, member_id)
+        exam = self._get_exam_or_raise(exam_id, member_id)
         student = self._get_student_or_raise(student_id, exam_id)
 
         grades = self.result_repo.list_grades_by_student_exam(student_id, exam_id)
@@ -198,13 +198,14 @@ class ResultService:
 
         problem_ids = [g.problem_id for g in grades]
         model_answer_map = self.model_answer_repo.map_by_problem_ids(problem_ids)
+        rubric_map = self.rubric_repo.map_by_problem_ids(problem_ids)
 
-        ocr_results = self.ocr_result_repo.list_by_student(student_id)
+        ocr_results = self.ocr_result_repo.list_by_student(student_id, exam.layout_mode)
         ocr_map = {region.problem_id: ocr for ocr, region in ocr_results}
 
         grade_responses = []
         for grade in grades:
-            rubrics = self.rubric_repo.list_by_problem(grade.problem_id)
+            rubrics = rubric_map.get(grade.problem_id, [])
             ma = model_answer_map.get(grade.problem_id)
             problem = problem_map[grade.problem_id]
             grade_responses.append(
