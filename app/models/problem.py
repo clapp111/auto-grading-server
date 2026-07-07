@@ -8,7 +8,6 @@ from app.enums.programming_language import ProgrammingLanguage
 
 if TYPE_CHECKING:
     from app.models.exam import Exam
-    from app.models.answer_region import AnswerRegion
     from app.models.job import Job
 
 
@@ -25,5 +24,4 @@ class Problem(Base):
     problem_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     exam: Mapped["Exam"] = relationship(back_populates="problems")
-    answer_regions: Mapped[list["AnswerRegion"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
     jobs: Mapped[list["Job"]] = relationship(back_populates="problem")

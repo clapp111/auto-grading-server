@@ -7,7 +7,6 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.exam import Exam
-    from app.models.answer_sheet import AnswerSheet
 
 
 class Student(Base):
@@ -15,9 +14,8 @@ class Student(Base):
     __table_args__ = (UniqueConstraint("exam_id", "student_no"),)
 
     student_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
+    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     student_no: Mapped[str] = mapped_column(String, nullable=False)
 
     exam: Mapped["Exam"] = relationship(back_populates="students")
-    answer_sheet: Mapped["AnswerSheet | None"] = relationship(back_populates="student", uselist=False)

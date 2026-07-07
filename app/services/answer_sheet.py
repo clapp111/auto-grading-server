@@ -75,14 +75,23 @@ class AnswerSheetService:
     def list_answer_sheets(self, exam_id: int, member_id: int) -> list[AnswerSheetResponse]:
         self._get_exam_or_raise(exam_id, member_id)
         sheets = self.answer_sheet_repo.list_by_exam(exam_id)
-        sheets.sort(key=lambda x: x.student.student_no if x.student else "")
-        return [_to_response(s) for s in sheets]
+        student_ids = [s.student_id for s in sheets if s.student_id]
+        student_map = self.student_repo.map_by_ids(student_ids)
+        sheets.sort(key=lambda x: student_map[x.student_id].student_no if x.student_id else "")
+        return [
+            _to_response(
+                s,
+                student_map[s.student_id].name if s.student_id else None,
+                student_map[s.student_id].student_no if s.student_id else None,
+            )
+            for s in sheets
+        ]
 
     def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
         exam_id = sheet.exam_id
         db = self.answer_sheet_repo.db
-        student = sheet.student
+        student = self.student_repo.get_by_id(sheet.student_id) if sheet.student_id else None
 
         self.storage.delete(sheet.file_key)
         self.ocr_result_repo.delete_all_by_answer_sheet(sheet.answer_sheet_id, commit=False)    # OCR 결과 삭제
@@ -186,18 +195,19 @@ class AnswerSheetService:
             self.exam_repo.touch(exam_id)
 
         sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
-        return _to_response(sheet)
+        student = self.student_repo.get_by_id(sheet.student_id) if sheet.student_id else None
+        return _to_response(sheet, student.name if student else None, student.student_no if student else None)
 
 
-def _to_response(sheet: AnswerSheet) -> AnswerSheetResponse:
+def _to_response(sheet: AnswerSheet, student_name: str | None, student_no: str | None) -> AnswerSheetResponse:
     return AnswerSheetResponse(
         answer_sheet_id=sheet.answer_sheet_id,
         exam_id=sheet.exam_id,
         file_key=sheet.file_key,
         status=sheet.status,
         student_id=sheet.student_id,
-        student_name=sheet.student.name if sheet.student else None,
-        student_no=sheet.student.student_no if sheet.student else None,
+        student_name=student_name,
+        student_no=student_no,
     )
 
 

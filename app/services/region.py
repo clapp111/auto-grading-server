@@ -10,6 +10,7 @@ from app.repositories.answer_region import AnswerRegionRepository
 from app.repositories.answer_sheet import AnswerSheetRepository
 from app.repositories.exam import ExamRepository
 from app.repositories.job import JobRepository
+from app.repositories.problem import ProblemRepository
 from app.schemas.answer_region import (
     AnswerRegionCreateRequest,
     AnswerRegionResponse,
@@ -26,11 +27,13 @@ class RegionService:
         answer_region_repo: AnswerRegionRepository,
         answer_sheet_repo: AnswerSheetRepository,
         exam_repo: ExamRepository,
+        problem_repo: ProblemRepository,
         job_repo: JobRepository,
     ):
         self.answer_region_repo = answer_region_repo
         self.answer_sheet_repo = answer_sheet_repo
         self.exam_repo = exam_repo
+        self.problem_repo = problem_repo
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
@@ -57,7 +60,8 @@ class RegionService:
         if not exam or exam.member_id != member_id:
             raise AnswerSheetNotFoundError()
         regions = self.answer_region_repo.list_by_answer_sheet(answer_sheet_id, exam.layout_mode)
-        return [_to_response(r) for r in regions]
+        problem_map = self.problem_repo.map_by_ids([r.problem_id for r in regions])
+        return [_to_response(r, problem_map[r.problem_id].label) for r in regions]
 
     def create_region(self, answer_sheet_id: int, member_id: int, request: AnswerRegionCreateRequest) -> AnswerRegionResponse:
         sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
@@ -88,8 +92,9 @@ class RegionService:
                 **updates,
             )
         region = self.answer_region_repo.get_by_id(region.answer_region_id)
+        problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
-        return _to_response(region)
+        return _to_response(region, problem.label)
 
     def update_region(self, answer_region_id: int, member_id: int, request: AnswerRegionUpdateRequest) -> AnswerRegionResponse:
         region = self._get_region_or_raise(answer_region_id, member_id)
@@ -109,8 +114,9 @@ class RegionService:
 
         self.answer_region_repo.update(region, **updates)
         region = self.answer_region_repo.get_by_id(answer_region_id)
+        problem = self.problem_repo.get_by_id(region.problem_id)
         self.exam_repo.touch(exam_id)
-        return _to_response(region)
+        return _to_response(region, problem.label)
 
     def delete_region(self, answer_region_id: int, member_id: int) -> None:
         region = self._get_region_or_raise(answer_region_id, member_id)
@@ -140,8 +146,9 @@ class RegionService:
             )
 
         regions = self.answer_region_repo.list_by_answer_sheet(first_sheet.answer_sheet_id, exam.layout_mode)
+        problem_map = self.problem_repo.map_by_ids([r.problem_id for r in regions])
         self.exam_repo.touch(exam_id)
-        return [_to_response(r) for r in regions]
+        return [_to_response(r, problem_map[r.problem_id].label) for r in regions]
 
     def apply_template(self, exam_id: int, member_id: int) -> JobStartedResponse:
         from app.workers.region_tasks import apply_region_template
@@ -162,12 +169,12 @@ class RegionService:
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
 
-def _to_response(region: AnswerRegion) -> AnswerRegionResponse:
+def _to_response(region: AnswerRegion, problem_label: str) -> AnswerRegionResponse:
     return AnswerRegionResponse(
         answer_region_id=region.answer_region_id,
         answer_sheet_id=region.answer_sheet_id,
         problem_id=region.problem_id,
-        problem_label=region.problem.label,
+        problem_label=problem_label,
         shape=region.shape,
         bbox_region=Region(**region.bbox_region) if region.bbox_region else None,
         polygon_points=[Point(**p) for p in region.polygon_points] if region.polygon_points else None,
@@ -180,5 +187,6 @@ def get_region_service(db: Session = Depends(get_db)) -> RegionService:
         AnswerRegionRepository(db),
         AnswerSheetRepository(db),
         ExamRepository(db),
+        ProblemRepository(db),
         JobRepository(db),
     )

@@ -83,12 +83,13 @@ class OcrService:
 
         sheets = self.answer_sheet_repo.list_by_exam(exam_id)
         matched_sheets = [s for s in sheets if s.student_id is not None]
+        student_map = self.student_repo.map_by_ids([s.student_id for s in matched_sheets])
 
         all_items: list[StudentOcrProgressItem] = []
         confirmed_student_count = 0
 
         for sheet in matched_sheets:
-            student = sheet.student
+            student = student_map[sheet.student_id]
             total, confirmed = self.ocr_result_repo.count_by_answer_sheet(sheet.answer_sheet_id, exam.layout_mode)
             percent = (confirmed * 100 // total) if total > 0 else 0
 

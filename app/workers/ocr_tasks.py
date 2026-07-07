@@ -304,6 +304,7 @@ def run_answer_ocr(self, job_id: int):
     from app.models.answer_sheet import AnswerSheet
     from app.models.job import Job
     from app.models.ocr_result import OCRResult
+    from app.models.problem import Problem
     from app.schemas.common import Region
 
     db = SessionLocal()
@@ -333,13 +334,10 @@ def run_answer_ocr(self, job_id: int):
         )
 
         # (sheet, region) 쌍 목록 구성 — sheet 순서대로 묶여 있어 PDF 캐시 가능
-        from sqlalchemy.orm import selectinload
-
         targets: list[tuple[AnswerSheet, AnswerRegion]] = []
         for sheet in sheets:
             regions = (
                 db.query(AnswerRegion)
-                .options(selectinload(AnswerRegion.problem))
                 .filter(
                     AnswerRegion.answer_sheet_id == sheet.answer_sheet_id,
                     AnswerRegion.layout_mode == layout_mode,
@@ -348,6 +346,9 @@ def run_answer_ocr(self, job_id: int):
             )
             for region in regions:
                 targets.append((sheet, region))
+
+        problem_ids = list({region.problem_id for _, region in targets})
+        problem_map = {p.problem_id: p for p in db.query(Problem).filter(Problem.problem_id.in_(problem_ids)).all()}
 
         total = len(targets)
         if total == 0:
@@ -393,7 +394,7 @@ def run_answer_ocr(self, job_id: int):
                 image_bytes = crop_region(current_pdf_bytes, r.page, r.x, r.y, r.w, r.h)
                 ocr_text = ocr_client.recognize(image_bytes)
 
-                if region.problem.type == ProblemType.MULTIPLE_CHOICE:
+                if problem_map[region.problem_id].type == ProblemType.MULTIPLE_CHOICE:
                     marked_choice = _parse_marked_choice(ocr_text)
                     text = None
                 else:
