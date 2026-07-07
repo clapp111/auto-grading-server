@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.enums.grade_status import GradeStatus
 from app.enums.grade_method import GradeMethod
@@ -9,21 +9,12 @@ class GradeRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _with_relations(self):
-        return [selectinload(Grade.student), selectinload(Grade.problem)]
-
     def get_by_id(self, grade_id: int) -> Grade | None:
-        return (
-            self.db.query(Grade)
-            .options(*self._with_relations())
-            .filter(Grade.grade_id == grade_id)
-            .first()
-        )
+        return self.db.get(Grade, grade_id)
 
     def list_by_problem(self, problem_id: int) -> list[Grade]:
         return (
             self.db.query(Grade)
-            .options(*self._with_relations())
             .filter(Grade.problem_id == problem_id)
             .order_by(Grade.student_id)
             .all()

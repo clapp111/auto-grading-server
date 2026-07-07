@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from app.models.model_answer import ModelAnswer
     from app.models.rubric import Rubric
     from app.models.answer_region import AnswerRegion
-    from app.models.grade import Grade
     from app.models.job import Job
 
 
@@ -31,5 +30,4 @@ class Problem(Base):
     model_answer: Mapped["ModelAnswer | None"] = relationship(back_populates="problem", uselist=False, cascade="all, delete-orphan")
     rubrics: Mapped[list["Rubric"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
     answer_regions: Mapped[list["AnswerRegion"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
-    grades: Mapped[list["Grade"]] = relationship(back_populates="problem", cascade="all, delete-orphan")
     jobs: Mapped[list["Job"]] = relationship(back_populates="problem")

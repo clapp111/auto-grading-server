@@ -34,6 +34,10 @@ class StudentRepository:
         self.db.refresh(student)
         return student
 
+    def map_by_ids(self, student_ids: list[int]) -> dict[int, Student]:
+        students = self.db.query(Student).filter(Student.student_id.in_(student_ids)).all()
+        return {s.student_id: s for s in students}
+
     def delete(self, student: Student, commit: bool = True) -> None:
         self.db.delete(student)
         if commit:

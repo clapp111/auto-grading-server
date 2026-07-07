@@ -8,7 +8,6 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.exam import Exam
     from app.models.answer_sheet import AnswerSheet
-    from app.models.grade import Grade
 
 
 class Student(Base):
@@ -22,4 +21,3 @@ class Student(Base):
 
     exam: Mapped["Exam"] = relationship(back_populates="students")
     answer_sheet: Mapped["AnswerSheet | None"] = relationship(back_populates="student", uselist=False)
-    grades: Mapped[list["Grade"]] = relationship(back_populates="student")
