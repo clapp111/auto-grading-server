@@ -1,3 +1,4 @@
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.enums.grade_status import GradeStatus
@@ -25,6 +26,21 @@ class GradeRepository:
         total = base.count()
         confirmed = base.filter(Grade.status == GradeStatus.CONFIRMED).count()
         return total, confirmed
+
+    def count_by_problems(self, problem_ids: list[int]) -> dict[int, tuple[int, int]]:
+        if not problem_ids:
+            return {}
+        rows = (
+            self.db.query(
+                Grade.problem_id,
+                func.count(Grade.grade_id),
+                func.count(case((Grade.status == GradeStatus.CONFIRMED, Grade.grade_id))),
+            )
+            .filter(Grade.problem_id.in_(problem_ids))
+            .group_by(Grade.problem_id)
+            .all()
+        )
+        return {problem_id: (total, confirmed) for problem_id, total, confirmed in rows}
 
     def create(
         self,

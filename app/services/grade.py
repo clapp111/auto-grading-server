@@ -72,6 +72,8 @@ class GradeService:
         if not grade:
             raise GradeNotFoundError()
         problem = self.problem_repo.get_by_id(grade.problem_id)
+        if not problem:
+            raise GradeNotFoundError()
         exam = self.exam_repo.get_by_id(problem.exam_id)
         if not exam or exam.member_id != member_id:
             raise GradeNotFoundError()
@@ -86,8 +88,9 @@ class GradeService:
         total_possible = student_count * len(problems)
         items: list[ProblemGradingItem] = []
 
+        count_map = self.grade_repo.count_by_problems([p.problem_id for p in problems])
         for problem in problems:
-            graded, confirmed = self.grade_repo.count_by_problem(problem.problem_id)
+            _, confirmed = count_map.get(problem.problem_id, (0, 0))
             total_confirmed += confirmed
             percent = (confirmed * 100 // student_count) if student_count > 0 else 0
             items.append(ProblemGradingItem(
@@ -159,6 +162,15 @@ class GradeService:
             for grade in grades
         ]
 
+    def _build_grade_response(self, grade: Grade, problem, exam_id: int) -> GradeResponse:
+        student = self.student_repo.get_by_id(grade.student_id)
+        rubrics = self.rubric_repo.list_by_problem(grade.problem_id)
+        ocr_map = self.ocr_result_repo.map_by_problem(grade.problem_id)
+        model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
+        model_answer_text = model_answer.model_answer_text if model_answer else None
+        self.exam_repo.touch(exam_id)
+        return _to_response(grade, student.name, student.student_no, problem.max_score, rubrics, ocr_map.get(grade.student_id), model_answer_text)
+
     def update_grade(self, grade_id: int, member_id: int, request: GradeUpdateRequest) -> GradeResponse:
         grade = self._get_grade_or_raise(grade_id, member_id)
         problem = self.problem_repo.get_by_id(grade.problem_id)
@@ -183,15 +195,7 @@ class GradeService:
 
         self.grade_repo.update(grade, **updates)
         grade = self.grade_repo.get_by_id(grade_id)
-
-        student = self.student_repo.get_by_id(grade.student_id)
-        rubrics = self.rubric_repo.list_by_problem(grade.problem_id)
-        ocr_map = self.ocr_result_repo.map_by_problem(grade.problem_id)
-        model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
-        model_answer_text = model_answer.model_answer_text if model_answer else None
-
-        self.exam_repo.touch(exam_id)
-        return _to_response(grade, student.name, student.student_no, problem.max_score, rubrics, ocr_map.get(grade.student_id), model_answer_text)
+        return self._build_grade_response(grade, problem, exam_id)
 
     def confirm_grade(self, grade_id: int, member_id: int) -> GradeResponse:
         grade = self._get_grade_or_raise(grade_id, member_id)
@@ -199,15 +203,7 @@ class GradeService:
         exam_id = problem.exam_id
         self.grade_repo.update(grade, status=GradeStatus.CONFIRMED)
         grade = self.grade_repo.get_by_id(grade_id)
-
-        student = self.student_repo.get_by_id(grade.student_id)
-        rubrics = self.rubric_repo.list_by_problem(grade.problem_id)
-        ocr_map = self.ocr_result_repo.map_by_problem(grade.problem_id)
-        model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
-        model_answer_text = model_answer.model_answer_text if model_answer else None
-
-        self.exam_repo.touch(exam_id)
-        return _to_response(grade, student.name, student.student_no, problem.max_score, rubrics, ocr_map.get(grade.student_id), model_answer_text)
+        return self._build_grade_response(grade, problem, exam_id)
 
     def confirm_all_grades(self, problem_id: int, member_id: int) -> GradeBulkConfirmResponse:
         problem = self._get_problem_or_raise(problem_id, member_id)

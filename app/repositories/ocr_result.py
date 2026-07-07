@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
@@ -51,7 +49,6 @@ class OcrResultRepository:
         return {student_id: ocr_result for ocr_result, student_id in rows}
 
     def update(self, ocr_result: OCRResult, **kwargs) -> OCRResult:
-        kwargs.setdefault("updated_at", datetime.now(timezone.utc))
         for key, value in kwargs.items():
             setattr(ocr_result, key, value)
         self.db.commit()
