@@ -28,12 +28,14 @@ from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 class AnswerSheetService:
     def __init__(
         self,
+        db: Session,
         answer_sheet_repo: AnswerSheetRepository,
         student_repo: StudentRepository,
         exam_repo: ExamRepository,
         job_repo: JobRepository,
         storage: StorageClient,
     ):
+        self.db = db
         self.answer_sheet_repo = answer_sheet_repo
         self.student_repo = student_repo
         self.exam_repo = exam_repo
@@ -68,12 +70,12 @@ class AnswerSheetService:
         sheets = self.answer_sheet_repo.list_by_exam(exam_id)
         student_ids = [s.student_id for s in sheets if s.student_id]
         student_map = self.student_repo.map_by_ids(student_ids)
-        sheets.sort(key=lambda x: student_map[x.student_id].student_no if x.student_id else "")
+        sheets.sort(key=lambda x: student_map[x.student_id].student_no if x.student_id and x.student_id in student_map else "")
         return [
             _to_response(
                 s,
-                student_map[s.student_id].name if s.student_id else None,
-                student_map[s.student_id].student_no if s.student_id else None,
+                student_map[s.student_id].name if s.student_id and s.student_id in student_map else None,
+                student_map[s.student_id].student_no if s.student_id and s.student_id in student_map else None,
             )
             for s in sheets
         ]
@@ -81,14 +83,13 @@ class AnswerSheetService:
     def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
         exam_id = sheet.exam_id
-        db = self.answer_sheet_repo.db
         student = self.student_repo.get_by_id(sheet.student_id) if sheet.student_id else None
 
         self.answer_sheet_repo.delete(sheet, commit=False)
         if student:
             self.student_repo.delete(student, commit=False)
 
-        db.commit()
+        self.db.commit()
         self.storage.delete(sheet.file_key)
         self.exam_repo.touch(exam_id)
 
@@ -203,6 +204,7 @@ def get_answer_sheet_service(
     storage: StorageClient = Depends(get_storage),
 ) -> AnswerSheetService:
     return AnswerSheetService(
+        db,
         AnswerSheetRepository(db),
         StudentRepository(db),
         ExamRepository(db),

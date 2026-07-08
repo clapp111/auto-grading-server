@@ -168,7 +168,6 @@ class GradeService:
         ocr_map = self.ocr_result_repo.map_by_problem(grade.problem_id)
         model_answer = self.model_answer_repo.get_by_problem_id(grade.problem_id)
         model_answer_text = model_answer.model_answer_text if model_answer else None
-        self.exam_repo.touch(exam_id)
         return _to_response(grade, student.name, student.student_no, problem.max_score, rubrics, ocr_map.get(grade.student_id), model_answer_text)
 
     def update_grade(self, grade_id: int, member_id: int, request: GradeUpdateRequest) -> GradeResponse:
@@ -195,6 +194,7 @@ class GradeService:
 
         self.grade_repo.update(grade, **updates)
         grade = self.grade_repo.get_by_id(grade_id)
+        self.exam_repo.touch(exam_id)
         return self._build_grade_response(grade, problem, exam_id)
 
     def confirm_grade(self, grade_id: int, member_id: int) -> GradeResponse:
@@ -203,6 +203,7 @@ class GradeService:
         exam_id = problem.exam_id
         self.grade_repo.update(grade, status=GradeStatus.CONFIRMED)
         grade = self.grade_repo.get_by_id(grade_id)
+        self.exam_repo.touch(exam_id)
         return self._build_grade_response(grade, problem, exam_id)
 
     def confirm_all_grades(self, problem_id: int, member_id: int) -> GradeBulkConfirmResponse:

@@ -1,7 +1,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamNotFoundError
+from app.core.exceptions import ExamNotFoundError, ExamStepConflictError
 from app.db.session import get_db
 
 from app.infrastructure.storage.base import StorageClient
@@ -101,6 +101,8 @@ class ExamService:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
+        if exam.step < from_step:
+            raise ExamStepConflictError()
         exam = self.repo.update(exam, step=from_step + 1)
         return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 

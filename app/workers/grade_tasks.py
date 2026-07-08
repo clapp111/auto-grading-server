@@ -41,6 +41,10 @@ def run_auto_grade(self, job_id: int):
 
         problem = db.get(Problem, job.problem_id)
         exam = db.get(Exam, job.exam_id)
+        if not problem:
+            raise ValueError("채점 대상 문제가 삭제되었습니다.")
+        if not exam:
+            raise ValueError("채점 대상 시험이 삭제되었습니다.")
 
         model_answer = (
             db.query(ModelAnswer)
@@ -210,6 +214,10 @@ def run_llm_grade(self, job_id: int):
 
         problem = db.get(Problem, job.problem_id)
         exam = db.get(Exam, job.exam_id)
+        if not problem:
+            raise ValueError("채점 대상 문제가 삭제되었습니다.")
+        if not exam:
+            raise ValueError("채점 대상 시험이 삭제되었습니다.")
 
         if problem.type not in (ProblemType.DESCRIPTIVE, ProblemType.CODING):
             raise ValueError("LLM 채점은 서술형/손코딩 문제에만 지원됩니다.")

@@ -73,7 +73,7 @@ def upgrade() -> None:
     op.create_foreign_key('job_problem_id_fkey', 'job', 'problem', ['problem_id'], ['problem_id'], ondelete='SET NULL')
 
     # job.answer_sheet_id → answer_sheet (SET NULL: nullable)
-    op.drop_constraint('job_answer_sheet_id_fkey', 'job', type_='foreignkey')
+    op.drop_constraint('fk_job_answer_sheet_id', 'job', type_='foreignkey')
     op.create_foreign_key('job_answer_sheet_id_fkey', 'job', 'answer_sheet', ['answer_sheet_id'], ['answer_sheet_id'], ondelete='SET NULL')
 
     # job.retry_of_job_id → job (SET NULL: self-referential, nullable)
@@ -86,7 +86,7 @@ def downgrade() -> None:
     op.create_foreign_key('job_retry_of_job_id_fkey', 'job', 'job', ['retry_of_job_id'], ['job_id'])
 
     op.drop_constraint('job_answer_sheet_id_fkey', 'job', type_='foreignkey')
-    op.create_foreign_key('job_answer_sheet_id_fkey', 'job', 'answer_sheet', ['answer_sheet_id'], ['answer_sheet_id'])
+    op.create_foreign_key('fk_job_answer_sheet_id', 'job', 'answer_sheet', ['answer_sheet_id'], ['answer_sheet_id'])
 
     op.drop_constraint('job_problem_id_fkey', 'job', type_='foreignkey')
     op.create_foreign_key('job_problem_id_fkey', 'job', 'problem', ['problem_id'], ['problem_id'])

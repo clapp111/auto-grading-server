@@ -29,6 +29,10 @@ def run_problem_ocr(self, job_id: int):
 
         problem = db.get(Problem, job.problem_id)
         exam = db.get(Exam, job.exam_id)
+        if not problem:
+            raise ValueError("OCR 대상 문제가 삭제되었습니다.")
+        if not exam:
+            raise ValueError("OCR 대상 시험이 삭제되었습니다.")
 
         if not problem.region:
             raise ValueError("OCR 대상 region이 지정되지 않았습니다.")
@@ -93,6 +97,11 @@ def run_model_answer_ocr(self, job_id: int):
 
         problem = db.get(Problem, job.problem_id)
         exam = db.get(Exam, job.exam_id)
+        if not problem:
+            raise ValueError("OCR 대상 문제가 삭제되었습니다.")
+        if not exam:
+            raise ValueError("OCR 대상 시험이 삭제되었습니다.")
+
         model_answer = db.query(ModelAnswer).filter(ModelAnswer.problem_id == problem.problem_id).first()
 
         if not model_answer or not model_answer.region:
@@ -246,8 +255,9 @@ def run_student_id_ocr(self, job_id: int):
                     sheet.status = SheetStatus.MATCHED
                     matched += 1
 
-            job.progress_json = _build_progress(index, total, "OCR", f"{index}/{total} 답안지의 학생 정보를 인식 중입니다.")
-            db.commit()
+            if index % max(1, total // 10) == 0 or index == total:
+                job.progress_json = _build_progress(index, total, "OCR", f"{index}/{total} 답안지의 학생 정보를 인식 중입니다.")
+                db.commit()
 
         job.completed_at = datetime.now(timezone.utc)
         job.result_json = {

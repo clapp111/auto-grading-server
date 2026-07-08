@@ -16,7 +16,7 @@ class Exam(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     problem_sheet_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
     model_answer_file_key: Mapped[str | None] = mapped_column(String, nullable=True)
-    step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     layout_mode: Mapped[LayoutMode] = mapped_column(SAEnum(LayoutMode), nullable=False, default=LayoutMode.FIXED)
     student_name_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     student_no_region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
