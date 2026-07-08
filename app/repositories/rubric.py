@@ -19,6 +19,20 @@ class RubricRepository:
             .all()
         )
 
+    def map_by_problem_ids(self, problem_ids: list[int]) -> dict[int, list[Rubric]]:
+        if not problem_ids:
+            return {}
+        rubrics = (
+            self.db.query(Rubric)
+            .filter(Rubric.problem_id.in_(problem_ids))
+            .order_by(Rubric.problem_id, Rubric.order_index)
+            .all()
+        )
+        result: dict[int, list[Rubric]] = {}
+        for r in rubrics:
+            result.setdefault(r.problem_id, []).append(r)
+        return result
+
     def max_order_index(self, problem_id: int) -> int:
         from sqlalchemy import func
         result = self.db.query(func.max(Rubric.order_index)).filter(Rubric.problem_id == problem_id).scalar()

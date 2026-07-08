@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
-
-if TYPE_CHECKING:
-    from app.models.answer_sheet import AnswerSheet
-    from app.models.exam import Exam
-    from app.models.member import Member
-    from app.models.problem import Problem
 
 
 class Job(Base):
@@ -22,11 +15,11 @@ class Job(Base):
 
     # 식별 / 관계
     job_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    exam_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("exam.exam_id"), nullable=False)
-    problem_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("problem.problem_id"), nullable=True)
-    answer_sheet_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("answer_sheet.answer_sheet_id"), nullable=True)
-    requested_by_member_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("member.member_id"), nullable=False)
-    retry_of_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("job.job_id"), nullable=True)
+    exam_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("exam.exam_id", ondelete="SET NULL"), nullable=True)
+    problem_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("problem.problem_id", ondelete="SET NULL"), nullable=True)
+    answer_sheet_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("answer_sheet.answer_sheet_id", ondelete="SET NULL"), nullable=True)
+    requested_by_member_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("member.member_id", ondelete="SET NULL"), nullable=True)
+    retry_of_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("job.job_id", ondelete="SET NULL"), nullable=True)
 
     # 유형 / 상태
     type: Mapped[JobType] = mapped_column(SAEnum(JobType), nullable=False)
@@ -56,8 +49,3 @@ class Job(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
 
-    exam: Mapped["Exam"] = relationship(back_populates="jobs")
-    problem: Mapped["Problem | None"] = relationship(back_populates="jobs")
-    answer_sheet: Mapped["AnswerSheet | None"] = relationship(back_populates="jobs")
-    requested_by: Mapped["Member"] = relationship(foreign_keys=[requested_by_member_id])
-    retry_of: Mapped["Job | None"] = relationship(remote_side=[job_id])

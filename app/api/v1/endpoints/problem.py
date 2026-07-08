@@ -6,7 +6,7 @@ from app.schemas.common import ApiResponse
 from app.schemas.job import JobStartedResponse
 from app.schemas.problem import ProblemCreateRequest, ProblemResponse, ProblemUpdateRequest
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
-from app.services.problem_setup import ProblemSetupService, get_problem_setup_service
+from app.services.problem import ProblemService, get_problem_service
 
 router = APIRouter(tags=["problems"])
 
@@ -16,7 +16,7 @@ async def issue_problem_sheet_url(
     exam_id: int,
     request: PresignedUrlRequest,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> ApiResponse[PresignedUrlResponse]:
     return ApiResponse(data=service.issue_problem_sheet_url(exam_id, current_member.member_id, request))
 
@@ -25,7 +25,7 @@ async def issue_problem_sheet_url(
 async def list_problems(
     exam_id: int,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> ApiResponse[list[ProblemResponse]]:
     return ApiResponse(data=service.list_problems(exam_id, current_member.member_id))
 
@@ -35,7 +35,7 @@ async def create_problem(
     exam_id: int,
     request: ProblemCreateRequest,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> ApiResponse[ProblemResponse]:
     return ApiResponse(data=service.create_problem(exam_id, current_member.member_id, request))
 
@@ -45,7 +45,7 @@ async def update_problem(
     problem_id: int,
     request: ProblemUpdateRequest,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> ApiResponse[ProblemResponse]:
     return ApiResponse(data=service.update_problem(problem_id, current_member.member_id, request))
 
@@ -54,7 +54,7 @@ async def update_problem(
 async def run_problem_ocr(
     problem_id: int,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> ApiResponse[JobStartedResponse]:
     return ApiResponse(data=service.run_problem_ocr(problem_id, current_member.member_id))
 
@@ -63,7 +63,7 @@ async def run_problem_ocr(
 async def delete_problem(
     problem_id: int,
     current_member: Member = Depends(get_current_member),
-    service: ProblemSetupService = Depends(get_problem_setup_service),
+    service: ProblemService = Depends(get_problem_service),
 ) -> Response:
     service.delete_problem(problem_id, current_member.member_id)
     return Response(status_code=204)

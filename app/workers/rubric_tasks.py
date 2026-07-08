@@ -20,6 +20,7 @@ def suggest_rubric_task(self, job_id: int):
     from app.enums.rubric_source import RubricSource
     from app.models.job import Job
     from app.models.model_answer import ModelAnswer
+    from app.models.problem import Problem
     from app.models.rubric import Rubric
 
     db = SessionLocal()
@@ -31,7 +32,7 @@ def suggest_rubric_task(self, job_id: int):
         job.progress_json = _build_progress(0, 3, "PREPARING", "루브릭 추천을 준비 중입니다.")
         db.commit()
 
-        problem = job.problem
+        problem = db.get(Problem, job.problem_id)
         model_answer = (
             db.query(ModelAnswer)
             .filter(ModelAnswer.problem_id == problem.problem_id)

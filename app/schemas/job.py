@@ -14,10 +14,10 @@ class JobStartedResponse(BaseModel):
 
 class JobResponse(BaseModel):
     job_id: int
-    exam_id: int
+    exam_id: int | None
     problem_id: int | None
     answer_sheet_id: int | None
-    requested_by_member_id: int
+    requested_by_member_id: int | None
     retry_of_job_id: int | None
 
     type: JobType

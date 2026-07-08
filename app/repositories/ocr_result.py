@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
-
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
 from app.enums.ocr_status import OCRStatus
@@ -9,31 +8,18 @@ from app.models.answer_sheet import AnswerSheet
 from app.models.ocr_result import OCRResult
 
 
-def _with_relations():
-    return selectinload(OCRResult.answer_region).options(
-        selectinload(AnswerRegion.problem),
-        selectinload(AnswerRegion.answer_sheet),
-    )
-
-
 class OcrResultRepository:
     def __init__(self, db: Session):
         self.db = db
 
     def get_by_id(self, ocr_result_id: int) -> OCRResult | None:
-        return (
-            self.db.query(OCRResult)
-            .options(_with_relations())
-            .filter(OCRResult.ocr_result_id == ocr_result_id)
-            .first()
-        )
+        return self.db.get(OCRResult, ocr_result_id)
 
-    def list_by_student(self, student_id: int, layout_mode: LayoutMode | None = None) -> list[OCRResult]:
+    def list_by_student(self, student_id: int, layout_mode: LayoutMode | None = None) -> list[tuple[OCRResult, AnswerRegion]]:
         query = (
-            self.db.query(OCRResult)
+            self.db.query(OCRResult, AnswerRegion)
             .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
             .join(AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
-            .options(_with_relations())
             .filter(AnswerSheet.student_id == student_id)
             .order_by(AnswerRegion.problem_id)
         )
@@ -53,6 +39,27 @@ class OcrResultRepository:
         confirmed = base.filter(OCRResult.status == OCRStatus.REVIEWED).count()
         return total, confirmed
 
+    def count_by_answer_sheets(
+        self,
+        answer_sheet_ids: list[int],
+        layout_mode: LayoutMode | None = None,
+    ) -> dict[int, tuple[int, int]]:
+        if not answer_sheet_ids:
+            return {}
+        query = (
+            self.db.query(
+                AnswerRegion.answer_sheet_id,
+                func.count(OCRResult.ocr_result_id),
+                func.count(case((OCRResult.status == OCRStatus.REVIEWED, OCRResult.ocr_result_id))),
+            )
+            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
+            .filter(AnswerRegion.answer_sheet_id.in_(answer_sheet_ids))
+        )
+        if layout_mode is not None:
+            query = query.filter(AnswerRegion.layout_mode == layout_mode)
+        rows = query.group_by(AnswerRegion.answer_sheet_id).all()
+        return {sheet_id: (total, confirmed) for sheet_id, total, confirmed in rows}
+
     def map_by_problem(self, problem_id: int) -> dict[int, OCRResult]:
         rows = (
             self.db.query(OCRResult, AnswerSheet.student_id)
@@ -63,22 +70,7 @@ class OcrResultRepository:
         )
         return {student_id: ocr_result for ocr_result, student_id in rows}
 
-    def delete_all_by_answer_sheet(self, answer_sheet_id: int, commit: bool = True) -> None:
-        region_ids = (
-            self.db.query(AnswerRegion.answer_region_id)
-            .filter(AnswerRegion.answer_sheet_id == answer_sheet_id)
-            .subquery()
-        )
-        (
-            self.db.query(OCRResult)
-            .filter(OCRResult.answer_region_id.in_(region_ids))
-            .delete(synchronize_session=False)
-        )
-        if commit:
-            self.db.commit()
-
     def update(self, ocr_result: OCRResult, **kwargs) -> OCRResult:
-        kwargs.setdefault("updated_at", datetime.now(timezone.utc))
         for key, value in kwargs.items():
             setattr(ocr_result, key, value)
         self.db.commit()

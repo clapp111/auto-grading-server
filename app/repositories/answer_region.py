@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
 from app.enums.region_shape import RegionShape
@@ -12,12 +12,7 @@ class AnswerRegionRepository:
         self.db = db
 
     def get_by_id(self, answer_region_id: int) -> AnswerRegion | None:
-        return (
-            self.db.query(AnswerRegion)
-            .options(selectinload(AnswerRegion.problem))
-            .filter(AnswerRegion.answer_region_id == answer_region_id)
-            .first()
-        )
+        return self.db.get(AnswerRegion, answer_region_id)
 
     def get_by_sheet_problem_and_mode(
         self,
@@ -27,7 +22,6 @@ class AnswerRegionRepository:
     ) -> AnswerRegion | None:
         return (
             self.db.query(AnswerRegion)
-            .options(selectinload(AnswerRegion.problem))
             .filter(
                 AnswerRegion.answer_sheet_id == answer_sheet_id,
                 AnswerRegion.problem_id == problem_id,
@@ -43,7 +37,6 @@ class AnswerRegionRepository:
     ) -> list[AnswerRegion]:
         query = (
             self.db.query(AnswerRegion)
-            .options(selectinload(AnswerRegion.problem))
             .filter(AnswerRegion.answer_sheet_id == answer_sheet_id)
         )
         if layout_mode is not None:

@@ -9,12 +9,9 @@ from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
 from app.models.answer_sheet import AnswerSheet
-from app.repositories.answer_region import AnswerRegionRepository
 from app.repositories.answer_sheet import AnswerSheetRepository
 from app.repositories.exam import ExamRepository
-from app.repositories.grade import GradeRepository
 from app.repositories.job import JobRepository
-from app.repositories.ocr_result import OcrResultRepository
 from app.repositories.student import StudentRepository
 from app.schemas.answer_sheet import (
     AnswerSheetDownloadResponse,
@@ -31,19 +28,15 @@ from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 class AnswerSheetService:
     def __init__(
         self,
-        answer_region_repo: AnswerRegionRepository,
+        db: Session,
         answer_sheet_repo: AnswerSheetRepository,
-        ocr_result_repo: OcrResultRepository,
-        grade_repo: GradeRepository,
         student_repo: StudentRepository,
         exam_repo: ExamRepository,
         job_repo: JobRepository,
         storage: StorageClient,
     ):
-        self.answer_region_repo = answer_region_repo
+        self.db = db
         self.answer_sheet_repo = answer_sheet_repo
-        self.ocr_result_repo = ocr_result_repo
-        self.grade_repo = grade_repo
         self.student_repo = student_repo
         self.exam_repo = exam_repo
         self.job_repo = job_repo
@@ -75,25 +68,29 @@ class AnswerSheetService:
     def list_answer_sheets(self, exam_id: int, member_id: int) -> list[AnswerSheetResponse]:
         self._get_exam_or_raise(exam_id, member_id)
         sheets = self.answer_sheet_repo.list_by_exam(exam_id)
-        sheets.sort(key=lambda x: x.student.student_no if x.student else "")
-        return [_to_response(s) for s in sheets]
+        student_ids = [s.student_id for s in sheets if s.student_id]
+        student_map = self.student_repo.map_by_ids(student_ids)
+        sheets.sort(key=lambda x: student_map[x.student_id].student_no if x.student_id and x.student_id in student_map else "")
+        return [
+            _to_response(
+                s,
+                student_map[s.student_id].name if s.student_id and s.student_id in student_map else None,
+                student_map[s.student_id].student_no if s.student_id and s.student_id in student_map else None,
+            )
+            for s in sheets
+        ]
 
     def delete_answer_sheet(self, answer_sheet_id: int, member_id: int) -> None:
         sheet = self._get_sheet_or_raise(answer_sheet_id, member_id)
         exam_id = sheet.exam_id
-        db = self.answer_sheet_repo.db
-        student = sheet.student
+        student = self.student_repo.get_by_id(sheet.student_id) if sheet.student_id else None
 
+        self.answer_sheet_repo.delete(sheet, commit=False)
+        if student:
+            self.student_repo.delete(student, commit=False)
+
+        self.db.commit()
         self.storage.delete(sheet.file_key)
-        self.ocr_result_repo.delete_all_by_answer_sheet(sheet.answer_sheet_id, commit=False)    # OCR 결과 삭제
-        self.answer_region_repo.delete_all_by_answer_sheet(sheet.answer_sheet_id, commit=False) # 답안 영역 삭제
-        if student:
-            self.grade_repo.delete_all_by_student(student.student_id, commit=False)             # 성적 삭제
-        self.answer_sheet_repo.delete(sheet, commit=False)                                      # 답안지 삭제
-        if student:
-            self.student_repo.delete(student, commit=False)                                     # 학생 삭제
-
-        db.commit()
         self.exam_repo.touch(exam_id)
 
     def get_download_url(self, answer_sheet_id: int, member_id: int) -> AnswerSheetDownloadResponse:
@@ -186,18 +183,19 @@ class AnswerSheetService:
             self.exam_repo.touch(exam_id)
 
         sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
-        return _to_response(sheet)
+        student = self.student_repo.get_by_id(sheet.student_id) if sheet.student_id else None
+        return _to_response(sheet, student.name if student else None, student.student_no if student else None)
 
 
-def _to_response(sheet: AnswerSheet) -> AnswerSheetResponse:
+def _to_response(sheet: AnswerSheet, student_name: str | None, student_no: str | None) -> AnswerSheetResponse:
     return AnswerSheetResponse(
         answer_sheet_id=sheet.answer_sheet_id,
         exam_id=sheet.exam_id,
         file_key=sheet.file_key,
         status=sheet.status,
         student_id=sheet.student_id,
-        student_name=sheet.student.name if sheet.student else None,
-        student_no=sheet.student.student_no if sheet.student else None,
+        student_name=student_name,
+        student_no=student_no,
     )
 
 
@@ -206,10 +204,8 @@ def get_answer_sheet_service(
     storage: StorageClient = Depends(get_storage),
 ) -> AnswerSheetService:
     return AnswerSheetService(
-        AnswerRegionRepository(db),
+        db,
         AnswerSheetRepository(db),
-        OcrResultRepository(db),
-        GradeRepository(db),
         StudentRepository(db),
         ExamRepository(db),
         JobRepository(db),

@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.models.grade import Grade
 from app.models.problem import Problem
@@ -28,11 +28,10 @@ class ResultRepository:
         return {(g.problem_id, g.student_id): g for g in grades}
 
     def list_grades_by_student_exam(self, student_id: int, exam_id: int) -> list[Grade]:
-        """특정 학생의 시험 전체 채점 결과 (problem 순서). student/problem 관계 포함."""
+        """특정 학생의 시험 전체 채점 결과 (problem 순서)."""
         return (
             self.db.query(Grade)
             .join(Problem, Grade.problem_id == Problem.problem_id)
-            .options(selectinload(Grade.student), selectinload(Grade.problem))
             .filter(Grade.student_id == student_id, Problem.exam_id == exam_id)
             .order_by(Problem.problem_id)
             .all()

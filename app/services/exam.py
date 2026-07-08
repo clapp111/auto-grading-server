@@ -1,7 +1,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamNotFoundError
+from app.core.exceptions import ExamNotFoundError, ExamStepConflictError
 from app.db.session import get_db
 
 from app.infrastructure.storage.base import StorageClient
@@ -19,14 +19,14 @@ class ExamService:
         self.student_repo = student_repo
         self.storage = storage
 
-    def _to_response(self, exam: Exam) -> ExamResponse:
+    def _to_response(self, exam: Exam, student_count: int) -> ExamResponse:
         return ExamResponse(
             exam_id=exam.exam_id,
             name=exam.name,
             description=exam.description,
             step=exam.step,
             layout_mode=exam.layout_mode,
-            student_count=self.student_repo.count_by_exam(exam.exam_id),
+            student_count=student_count,
             problem_sheet_url=get_file_url(exam.problem_sheet_file_key),
             model_answer_url=get_file_url(exam.model_answer_file_key),
             created_at=exam.created_at,
@@ -56,7 +56,8 @@ class ExamService:
             in_progress=counts["in_progress"],
             done=counts["done"],
         )
-        return [self._to_response(e) for e in items], meta
+        student_count_map = self.student_repo.count_by_exams([e.exam_id for e in items])
+        return [self._to_response(e, student_count_map.get(e.exam_id, 0)) for e in items], meta
 
     def create_exam(self, member_id: int, request: ExamCreateRequest) -> ExamResponse:
         exam = self.repo.create(
@@ -64,13 +65,13 @@ class ExamService:
             name=request.name,
             description=request.description,
         )
-        return self._to_response(exam)
+        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def get_exam(self, exam_id: int, member_id: int) -> ExamResponse:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
-        return self._to_response(exam)
+        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def update_exam(self, exam_id: int, member_id: int, request: ExamUpdateRequest) -> ExamResponse:
         exam = self.repo.get_by_id(exam_id)
@@ -78,24 +79,21 @@ class ExamService:
             raise ExamNotFoundError()
         updates = request.model_dump(exclude_unset=True)
         exam = self.repo.update(exam, **updates)
-        return self._to_response(exam)
+        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def delete_exam(self, exam_id: int, member_id: int) -> None:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
 
-        # S3에 업로드된 파일들을 삭제(문제지, 모범답안, 학생별 답안지)
         s3_keys = self.repo.get_answer_sheet_file_keys(exam_id)
         if exam.problem_sheet_file_key:
             s3_keys.append(exam.problem_sheet_file_key)
         if exam.model_answer_file_key:
             s3_keys.append(exam.model_answer_file_key)
 
-        # 테이블 벌크 DELETE
-        self.repo.delete_cascade(exam_id)
+        self.repo.delete(exam_id)
 
-        # S3 파일 삭제
         for key in s3_keys:
             self.storage.delete(key)
 
@@ -103,8 +101,10 @@ class ExamService:
         exam = self.repo.get_by_id(exam_id)
         if not exam or exam.member_id != member_id:
             raise ExamNotFoundError()
+        if exam.step < from_step:
+            raise ExamStepConflictError()
         exam = self.repo.update(exam, step=from_step + 1)
-        return self._to_response(exam)
+        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
 
 def get_exam_service(

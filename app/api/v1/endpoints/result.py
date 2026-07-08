@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
@@ -49,8 +51,9 @@ async def export_results_csv(
     service: ResultService = Depends(get_result_service),
 ) -> StreamingResponse:
     content, filename = service.export_results_csv(exam_id, current_member.member_id)
+    encoded_filename = quote(filename, safe="", encoding="utf-8")
     return StreamingResponse(
         iter([content]),
         media_type="text/csv; charset=utf-8-sig",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )

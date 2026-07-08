@@ -9,6 +9,7 @@ from app.core.exceptions import (
     AnswerSheetNotFoundError,
     EmailAlreadyExistsError,
     ExamNotFoundError,
+    ExamStepConflictError,
     GradeNotFoundError,
     InvalidCredentialsError,
     InvalidCurrentPasswordError,
@@ -146,6 +147,14 @@ async def grade_not_found_handler(request: Request, exc: GradeNotFoundError) -> 
     return JSONResponse(
         status_code=404,
         content={"data": None, "meta": None, "error": {"code": "GRADE_NOT_FOUND", "message": "채점 결과를 찾을 수 없습니다."}},
+    )
+
+
+@app.exception_handler(ExamStepConflictError)
+async def exam_step_conflict_handler(request: Request, exc: ExamStepConflictError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"data": None, "meta": None, "error": {"code": "EXAM_STEP_CONFLICT", "message": "시험의 현재 단계가 요청한 단계와 일치하지 않습니다."}},
     )
 
 

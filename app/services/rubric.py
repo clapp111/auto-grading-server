@@ -44,15 +44,17 @@ class RubricService:
             raise ProblemNotFoundError()
         return problem
 
-    def _get_rubric_or_raise(self, rubric_id: int, member_id: int) -> Rubric:
+    def _get_rubric_or_raise(self, rubric_id: int, member_id: int) -> tuple[Rubric, int]:
         rubric = self.rubric_repo.get_by_id(rubric_id)
         if not rubric:
             raise RubricNotFoundError()
         problem = self.problem_repo.get_by_id(rubric.problem_id)
+        if not problem:
+            raise RubricNotFoundError()
         exam = self.exam_repo.get_by_id(problem.exam_id)
         if not exam or exam.member_id != member_id:
             raise RubricNotFoundError()
-        return rubric
+        return rubric, problem.exam_id
 
     def get_rubric(self, problem_id: int, member_id: int) -> list[RubricResponse]:
         self._get_problem_or_raise(problem_id, member_id)
@@ -83,18 +85,14 @@ class RubricService:
         return RubricResponse.model_validate(rubric)
 
     def update_criterion(self, rubric_id: int, member_id: int, request: RubricUpdateRequest) -> RubricResponse:
-        rubric = self._get_rubric_or_raise(rubric_id, member_id)
-        problem = self.problem_repo.get_by_id(rubric.problem_id)
-        exam_id = problem.exam_id
+        rubric, exam_id = self._get_rubric_or_raise(rubric_id, member_id)
         updates = request.model_dump(exclude_unset=True)
         rubric = self.rubric_repo.update(rubric, **updates)
         self.exam_repo.touch(exam_id)
         return RubricResponse.model_validate(rubric)
 
     def delete_criterion(self, rubric_id: int, member_id: int) -> None:
-        rubric = self._get_rubric_or_raise(rubric_id, member_id)
-        problem = self.problem_repo.get_by_id(rubric.problem_id)
-        exam_id = problem.exam_id
+        rubric, exam_id = self._get_rubric_or_raise(rubric_id, member_id)
         self.rubric_repo.delete(rubric)
         self.exam_repo.touch(exam_id)
 
@@ -114,6 +112,7 @@ class RubricService:
             },
         )
         suggest_rubric_task.delay(job.job_id)
+        self.exam_repo.touch(problem.exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
 
