@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.enums.grade_status import GradeStatus
 from app.enums.grade_method import GradeMethod
 from app.models.grade import Grade
+from app.models.student import Student
 
 
 class GradeRepository:
@@ -16,8 +17,9 @@ class GradeRepository:
     def list_by_problem(self, problem_id: int) -> list[Grade]:
         return (
             self.db.query(Grade)
+            .join(Student, Grade.student_id == Student.student_id)
             .filter(Grade.problem_id == problem_id)
-            .order_by(Grade.student_id)
+            .order_by(Student.student_no)
             .all()
         )
 
