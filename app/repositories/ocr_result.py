@@ -3,9 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.enums.layout_mode import LayoutMode
 from app.enums.ocr_status import OCRStatus
+from app.enums.problem_type import ProblemType
 from app.models.answer_region import AnswerRegion
 from app.models.answer_sheet import AnswerSheet
 from app.models.ocr_result import OCRResult
+from app.models.problem import Problem
+
+_OCR_EXCLUDED_TYPES = (ProblemType.MULTIPLE_CHOICE, ProblemType.SHORT_ANSWER)
 
 
 class OcrResultRepository:
@@ -20,7 +24,11 @@ class OcrResultRepository:
             self.db.query(OCRResult, AnswerRegion)
             .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
             .join(AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
-            .filter(AnswerSheet.student_id == student_id)
+            .join(Problem, AnswerRegion.problem_id == Problem.problem_id)
+            .filter(
+                AnswerSheet.student_id == student_id,
+                Problem.type.notin_(_OCR_EXCLUDED_TYPES),
+            )
             .order_by(AnswerRegion.problem_id)
         )
         if layout_mode is not None:
