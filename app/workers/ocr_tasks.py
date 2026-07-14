@@ -400,6 +400,12 @@ def run_answer_ocr(self, job_id: int):
                     succeeded += 1
                     continue
 
+                problem_type = problem_map[region.problem_id].type
+
+                if problem_type in (ProblemType.MULTIPLE_CHOICE, ProblemType.SHORT_ANSWER):
+                    succeeded += 1
+                    continue
+
                 if sheet.answer_sheet_id != current_sheet_id:
                     current_sheet_id = sheet.answer_sheet_id
                     current_pdf_bytes = storage.download(sheet.file_key)
@@ -407,32 +413,24 @@ def run_answer_ocr(self, job_id: int):
                 if not region.bbox_region:
                     raise ValueError("bbox_region이 지정되지 않았습니다.")
 
-                problem_type = problem_map[region.problem_id].type
                 if problem_type not in ocr_clients:
                     ocr_clients[problem_type] = get_ocr_client(problem_type)
 
                 r = Region(**region.bbox_region)
                 image_bytes = crop_region(current_pdf_bytes, r.page, r.x, r.y, r.w, r.h)
-                ocr_text = ocr_clients[problem_type].recognize(image_bytes)
-
-                if problem_type == ProblemType.MULTIPLE_CHOICE:
-                    marked_choice = _parse_marked_choice(ocr_text)
-                    text = None
-                else:
-                    marked_choice = None
-                    text = ocr_text
+                text = ocr_clients[problem_type].recognize(image_bytes)
 
                 now = datetime.now(timezone.utc)
                 if ocr_result:
                     ocr_result.text = text
-                    ocr_result.marked_choice = marked_choice
+                    ocr_result.marked_choice = None
                     ocr_result.status = OCRStatus.RAW
                     ocr_result.updated_at = now
                 else:
                     db.add(OCRResult(
                         answer_region_id=region.answer_region_id,
                         text=text,
-                        marked_choice=marked_choice,
+                        marked_choice=None,
                         status=OCRStatus.RAW,
                         updated_at=now,
                     ))
@@ -503,6 +501,7 @@ def _normalize_student_no(raw: str) -> str:
     return "".join(ch for ch in raw if ch.isdigit())
 
 
-def _parse_marked_choice(raw: str) -> int | None:
-    digits = [ch for ch in raw if ch.isdigit()]
-    return int(digits[0]) if len(digits) == 1 else None
+# run_answer_ocr에서 MC를 패스하면서 사용되지 않음
+# def _parse_marked_choice(raw: str) -> int | None:
+#     digits = [ch for ch in raw if ch.isdigit()]
+#     return int(digits[0]) if len(digits) == 1 else None
