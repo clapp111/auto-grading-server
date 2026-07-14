@@ -12,174 +12,177 @@ _PROBLEM_TYPE_LABELS = {
 }
 
 
-@celery_app.task(bind=True, max_retries=3)
-def run_auto_grade(self, job_id: int):
-    import app.db.models  # noqa: F401
-    from app.db.session import SessionLocal
-    from app.enums.grade_method import GradeMethod
-    from app.enums.grade_status import GradeStatus
-    from app.enums.job_status import JobStatus
-    from app.enums.problem_type import ProblemType
-    from app.models.answer_region import AnswerRegion
-    from app.models.answer_sheet import AnswerSheet
-    from app.models.exam import Exam
-    from app.models.grade import Grade
-    from app.models.job import Job
-    from app.models.model_answer import ModelAnswer
-    from app.models.ocr_result import OCRResult
-    from app.models.problem import Problem
-    from app.models.student import Student
-
-    db = SessionLocal()
-    job = db.get(Job, job_id)
-    try:
-        job.status = JobStatus.RUNNING
-        job.started_at = datetime.now(timezone.utc)
-        job.celery_task_id = self.request.id
-        job.progress_json = _build_progress(0, 0, "PREPARING", "자동 채점을 준비 중입니다.")
-        db.commit()
-
-        problem = db.get(Problem, job.problem_id)
-        exam = db.get(Exam, job.exam_id)
-        if not problem:
-            raise ValueError("채점 대상 문제가 삭제되었습니다.")
-        if not exam:
-            raise ValueError("채점 대상 시험이 삭제되었습니다.")
-
-        model_answer = (
-            db.query(ModelAnswer)
-            .filter(ModelAnswer.problem_id == problem.problem_id)
-            .first()
-        )
-        problem_type = problem.type
-        if problem_type not in (ProblemType.MULTIPLE_CHOICE, ProblemType.SHORT_ANSWER):
-            raise ValueError("자동 채점은 객관식/단답형 문제에만 지원됩니다.")
-        if not model_answer:
-            raise ValueError("모범답안이 등록되지 않았습니다.")
-        if problem_type == ProblemType.MULTIPLE_CHOICE and model_answer.correct_choice is None:
-            raise ValueError("모범답안이 등록되지 않았습니다.")
-        if problem_type == ProblemType.SHORT_ANSWER and not model_answer.accepted_answers:
-            raise ValueError("모범답안이 등록되지 않았습니다.")
-
-        # OCR 결과가 있는 학생만 대상으로 단일 JOIN 쿼리 (exam.layout_mode와 일치하는 영역만)
-        rows = (
-            db.query(Student, OCRResult)
-            .join(AnswerSheet, AnswerSheet.student_id == Student.student_id)
-            .join(AnswerRegion, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
-            .join(OCRResult, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
-            .filter(
-                Student.exam_id == exam.exam_id,
-                AnswerRegion.problem_id == problem.problem_id,
-                AnswerRegion.layout_mode == exam.layout_mode,
-            )
-            .all()
-        )
-
-        # expire_on_commit 영향을 받지 않도록 plain dict로 추출
-        targets = [
-            {
-                "student_id": s.student_id,
-                "marked_choice": o.marked_choice,
-                "text": o.text,
-            }
-            for s, o in rows
-        ]
-
-        total = len(targets)
-        if total == 0:
-            job.status = JobStatus.DONE
-            job.completed_at = datetime.now(timezone.utc)
-            job.progress_json = _build_progress(0, 0, "DONE", "채점할 답안이 없습니다.")
-            job.result_json = {"summary": {"processed": 0, "succeeded": 0, "failed": 0}}
-            db.commit()
-            return
-
-        # expire_on_commit 영향을 받지 않도록 plain value로 추출
-        problem_id = problem.problem_id
-        max_score = problem.max_score
-        correct_choice = model_answer.correct_choice if problem_type == ProblemType.MULTIPLE_CHOICE else None
-        accepted_answers = (
-            [_normalize_text(a) for a in model_answer.accepted_answers]
-            if problem_type == ProblemType.SHORT_ANSWER
-            else None
-        )
-
-        succeeded = 0
-        failed = 0
-        failed_targets: list[dict] = []
-
-        job.progress_json = _build_progress(0, total, "GRADING", "자동 채점을 시작합니다.")
-        db.commit()
-
-        for index, t in enumerate(targets, start=1):
-            try:
-                if problem_type == ProblemType.MULTIPLE_CHOICE:
-                    correct = (t["marked_choice"] is not None and t["marked_choice"] == correct_choice)
-                else:  # SHORT_ANSWER
-                    correct = _normalize_text(t["text"] or "") in accepted_answers
-
-                score = max_score if correct else 0
-
-                existing = (
-                    db.query(Grade)
-                    .filter(Grade.problem_id == problem_id, Grade.student_id == t["student_id"])
-                    .first()
-                )
-                if existing:
-                    existing.score = score
-                    existing.method = GradeMethod.AUTO
-                    existing.status = GradeStatus.SUGGESTED
-                    existing.rubric_breakdown = None
-                    existing.comment = None
-                else:
-                    db.add(Grade(
-                        problem_id=problem_id,
-                        student_id=t["student_id"],
-                        score=score,
-                        method=GradeMethod.AUTO,
-                        status=GradeStatus.SUGGESTED,
-                    ))
-
-                succeeded += 1
-
-            except Exception as e:
-                failed += 1
-                failed_targets.append({"studentId": t["student_id"], "reason": str(e)})
-
-            if index % max(1, total // 10) == 0 or index == total:
-                job.progress_json = _build_progress(index, total, "GRADING", f"{index}/{total} 답안을 채점 중입니다.")
-                db.commit()
-
-        job.completed_at = datetime.now(timezone.utc)
-        job.result_json = {
-            "summary": {"processed": total, "succeeded": succeeded, "failed": failed},
-            "resultRef": {"type": "grades", "problemId": problem_id},
-        }
-
-        if failed > 0:
-            job.status = JobStatus.FAILED
-            job.progress_json = _build_progress(total, total, "FAILED", "일부 답안의 자동 채점에 실패했습니다.")
-            job.error_json = {
-                "code": "PARTIAL_AUTO_GRADE_FAILED",
-                "message": "일부 답안의 자동 채점에 실패했습니다.",
-                "retryable": False,
-                "category": "internal",
-                "failedTargets": failed_targets,
-            }
-        else:
-            job.status = JobStatus.DONE
-            job.progress_json = _build_progress(total, total, "DONE", "자동 채점이 완료되었습니다.")
-
-        db.commit()
-
-    except Exception as e:
-        job.status = JobStatus.FAILED
-        job.progress_json = _build_progress(0, 0, "FAILED", "자동 채점에 실패했습니다.")
-        job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False, "category": "internal"}
-        db.commit()
-
-    finally:
-        db.close()
+# 객관식/단답형은 채점 확정 단계에서 수작업으로 처리하는 방식으로 전환되어 더 이상 사용하지 않음.
+# 참고용으로 주석 처리하여 보존.
+#
+# @celery_app.task(bind=True, max_retries=3)
+# def run_auto_grade(self, job_id: int):
+#     import app.db.models  # noqa: F401
+#     from app.db.session import SessionLocal
+#     from app.enums.grade_method import GradeMethod
+#     from app.enums.grade_status import GradeStatus
+#     from app.enums.job_status import JobStatus
+#     from app.enums.problem_type import ProblemType
+#     from app.models.answer_region import AnswerRegion
+#     from app.models.answer_sheet import AnswerSheet
+#     from app.models.exam import Exam
+#     from app.models.grade import Grade
+#     from app.models.job import Job
+#     from app.models.model_answer import ModelAnswer
+#     from app.models.ocr_result import OCRResult
+#     from app.models.problem import Problem
+#     from app.models.student import Student
+#
+#     db = SessionLocal()
+#     job = db.get(Job, job_id)
+#     try:
+#         job.status = JobStatus.RUNNING
+#         job.started_at = datetime.now(timezone.utc)
+#         job.celery_task_id = self.request.id
+#         job.progress_json = _build_progress(0, 0, "PREPARING", "자동 채점을 준비 중입니다.")
+#         db.commit()
+#
+#         problem = db.get(Problem, job.problem_id)
+#         exam = db.get(Exam, job.exam_id)
+#         if not problem:
+#             raise ValueError("채점 대상 문제가 삭제되었습니다.")
+#         if not exam:
+#             raise ValueError("채점 대상 시험이 삭제되었습니다.")
+#
+#         model_answer = (
+#             db.query(ModelAnswer)
+#             .filter(ModelAnswer.problem_id == problem.problem_id)
+#             .first()
+#         )
+#         problem_type = problem.type
+#         if problem_type not in (ProblemType.MULTIPLE_CHOICE, ProblemType.SHORT_ANSWER):
+#             raise ValueError("자동 채점은 객관식/단답형 문제에만 지원됩니다.")
+#         if not model_answer:
+#             raise ValueError("모범답안이 등록되지 않았습니다.")
+#         if problem_type == ProblemType.MULTIPLE_CHOICE and model_answer.correct_choice is None:
+#             raise ValueError("모범답안이 등록되지 않았습니다.")
+#         if problem_type == ProblemType.SHORT_ANSWER and not model_answer.accepted_answers:
+#             raise ValueError("모범답안이 등록되지 않았습니다.")
+#
+#         # OCR 결과가 있는 학생만 대상으로 단일 JOIN 쿼리 (exam.layout_mode와 일치하는 영역만)
+#         rows = (
+#             db.query(Student, OCRResult)
+#             .join(AnswerSheet, AnswerSheet.student_id == Student.student_id)
+#             .join(AnswerRegion, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
+#             .join(OCRResult, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
+#             .filter(
+#                 Student.exam_id == exam.exam_id,
+#                 AnswerRegion.problem_id == problem.problem_id,
+#                 AnswerRegion.layout_mode == exam.layout_mode,
+#             )
+#             .all()
+#         )
+#
+#         # expire_on_commit 영향을 받지 않도록 plain dict로 추출
+#         targets = [
+#             {
+#                 "student_id": s.student_id,
+#                 "marked_choice": o.marked_choice,
+#                 "text": o.text,
+#             }
+#             for s, o in rows
+#         ]
+#
+#         total = len(targets)
+#         if total == 0:
+#             job.status = JobStatus.DONE
+#             job.completed_at = datetime.now(timezone.utc)
+#             job.progress_json = _build_progress(0, 0, "DONE", "채점할 답안이 없습니다.")
+#             job.result_json = {"summary": {"processed": 0, "succeeded": 0, "failed": 0}}
+#             db.commit()
+#             return
+#
+#         # expire_on_commit 영향을 받지 않도록 plain value로 추출
+#         problem_id = problem.problem_id
+#         max_score = problem.max_score
+#         correct_choice = model_answer.correct_choice if problem_type == ProblemType.MULTIPLE_CHOICE else None
+#         accepted_answers = (
+#             [_normalize_text(a) for a in model_answer.accepted_answers]
+#             if problem_type == ProblemType.SHORT_ANSWER
+#             else None
+#         )
+#
+#         succeeded = 0
+#         failed = 0
+#         failed_targets: list[dict] = []
+#
+#         job.progress_json = _build_progress(0, total, "GRADING", "자동 채점을 시작합니다.")
+#         db.commit()
+#
+#         for index, t in enumerate(targets, start=1):
+#             try:
+#                 if problem_type == ProblemType.MULTIPLE_CHOICE:
+#                     correct = (t["marked_choice"] is not None and t["marked_choice"] == correct_choice)
+#                 else:  # SHORT_ANSWER
+#                     correct = _normalize_text(t["text"] or "") in accepted_answers
+#
+#                 score = max_score if correct else 0
+#
+#                 existing = (
+#                     db.query(Grade)
+#                     .filter(Grade.problem_id == problem_id, Grade.student_id == t["student_id"])
+#                     .first()
+#                 )
+#                 if existing:
+#                     existing.score = score
+#                     existing.method = GradeMethod.AUTO
+#                     existing.status = GradeStatus.SUGGESTED
+#                     existing.rubric_breakdown = None
+#                     existing.comment = None
+#                 else:
+#                     db.add(Grade(
+#                         problem_id=problem_id,
+#                         student_id=t["student_id"],
+#                         score=score,
+#                         method=GradeMethod.AUTO,
+#                         status=GradeStatus.SUGGESTED,
+#                     ))
+#
+#                 succeeded += 1
+#
+#             except Exception as e:
+#                 failed += 1
+#                 failed_targets.append({"studentId": t["student_id"], "reason": str(e)})
+#
+#             if index % max(1, total // 10) == 0 or index == total:
+#                 job.progress_json = _build_progress(index, total, "GRADING", f"{index}/{total} 답안을 채점 중입니다.")
+#                 db.commit()
+#
+#         job.completed_at = datetime.now(timezone.utc)
+#         job.result_json = {
+#             "summary": {"processed": total, "succeeded": succeeded, "failed": failed},
+#             "resultRef": {"type": "grades", "problemId": problem_id},
+#         }
+#
+#         if failed > 0:
+#             job.status = JobStatus.FAILED
+#             job.progress_json = _build_progress(total, total, "FAILED", "일부 답안의 자동 채점에 실패했습니다.")
+#             job.error_json = {
+#                 "code": "PARTIAL_AUTO_GRADE_FAILED",
+#                 "message": "일부 답안의 자동 채점에 실패했습니다.",
+#                 "retryable": False,
+#                 "category": "internal",
+#                 "failedTargets": failed_targets,
+#             }
+#         else:
+#             job.status = JobStatus.DONE
+#             job.progress_json = _build_progress(total, total, "DONE", "자동 채점이 완료되었습니다.")
+#
+#         db.commit()
+#
+#     except Exception as e:
+#         job.status = JobStatus.FAILED
+#         job.progress_json = _build_progress(0, 0, "FAILED", "자동 채점에 실패했습니다.")
+#         job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False, "category": "internal"}
+#         db.commit()
+#
+#     finally:
+#         db.close()
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -487,10 +490,11 @@ def _call_claude_for_grade(
     raise ValueError("Claude API로부터 채점 결과를 받지 못했습니다.")
 
 
-def _parse_choice(text: str) -> int | None:
-    digits = [ch for ch in text if ch.isdigit()]
-    return int(digits[0]) if len(digits) == 1 else None
-
-
-def _normalize_text(text: str) -> str:
-    return " ".join(text.split()).strip().lower()
+# run_auto_grade 제거로 사용되지 않음
+# def _parse_choice(text: str) -> int | None:
+#     digits = [ch for ch in text if ch.isdigit()]
+#     return int(digits[0]) if len(digits) == 1 else None
+#
+#
+# def _normalize_text(text: str) -> str:
+#     return " ".join(text.split()).strip().lower()

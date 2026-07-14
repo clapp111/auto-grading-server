@@ -27,3 +27,5 @@ class StudentNotFoundError(Exception): pass
 class GradeNotFoundError(Exception): pass
 
 class ExamStepConflictError(Exception): pass
+
+class AutoGradeUnsupportedError(Exception): pass

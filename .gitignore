@@ -33,6 +33,9 @@ uploads/
 .DS_Store
 Thumbs.db
 
+# Secret Key
+auto-grading-502413-827debdf3128.json
+
 # Deployment
 # GitHub Actions: 배포 시 삭제
 .github/workflows/

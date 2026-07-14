@@ -34,6 +34,8 @@ class GradeResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class GradeCreateRequest(BaseModel):
+    score: int
 
 class GradeUpdateRequest(BaseModel):
     score: int | None = None
