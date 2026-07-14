@@ -10,7 +10,7 @@ def run_problem_ocr(self, job_id: int):
     import app.db.models  # noqa: F401
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
-    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.ocr.naver_clova_client import ClovaOcrClient
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
     from app.models.exam import Exam
@@ -77,7 +77,7 @@ def run_model_answer_ocr(self, job_id: int):
     import app.db.models  # noqa: F401 - 모든 모델을 SQLAlchemy 레지스트리에 등록
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
-    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.ocr.deps import get_ocr_client
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
     from app.models.exam import Exam
@@ -115,7 +115,7 @@ def run_model_answer_ocr(self, job_id: int):
 
         image_bytes = crop_region(pdf_bytes, region.page, region.x, region.y, region.w, region.h)
 
-        ocr_client = ClovaOcrClient()
+        ocr_client = get_ocr_client(problem.type)
         extracted_text = ocr_client.recognize(image_bytes)
 
         model_answer.model_answer_text = extracted_text
@@ -148,7 +148,7 @@ def run_student_id_ocr(self, job_id: int):
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
     from app.enums.sheet_status import SheetStatus
-    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.ocr.naver_clova_client import ClovaOcrClient
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
     from app.models.answer_sheet import AnswerSheet
@@ -312,7 +312,8 @@ def run_answer_ocr(self, job_id: int):
     from app.enums.ocr_status import OCRStatus
     from app.enums.layout_mode import LayoutMode
     from app.enums.problem_type import ProblemType
-    from app.infrastructure.ocr.ocr_client import ClovaOcrClient
+    from app.infrastructure.ocr.base import OcrClient
+    from app.infrastructure.ocr.deps import get_ocr_client
     from app.infrastructure.pdf.renderer import crop_region
     from app.infrastructure.storage.deps import get_storage
     from app.models.answer_region import AnswerRegion
@@ -376,7 +377,7 @@ def run_answer_ocr(self, job_id: int):
             return
 
         storage = get_storage()
-        ocr_client = ClovaOcrClient()
+        ocr_clients: dict[ProblemType, OcrClient] = {}
         succeeded = 0
         failed = 0
         failed_targets: list[dict] = []
@@ -406,11 +407,15 @@ def run_answer_ocr(self, job_id: int):
                 if not region.bbox_region:
                     raise ValueError("bbox_region이 지정되지 않았습니다.")
 
+                problem_type = problem_map[region.problem_id].type
+                if problem_type not in ocr_clients:
+                    ocr_clients[problem_type] = get_ocr_client(problem_type)
+
                 r = Region(**region.bbox_region)
                 image_bytes = crop_region(current_pdf_bytes, r.page, r.x, r.y, r.w, r.h)
-                ocr_text = ocr_client.recognize(image_bytes)
+                ocr_text = ocr_clients[problem_type].recognize(image_bytes)
 
-                if problem_map[region.problem_id].type == ProblemType.MULTIPLE_CHOICE:
+                if problem_type == ProblemType.MULTIPLE_CHOICE:
                     marked_choice = _parse_marked_choice(ocr_text)
                     text = None
                 else:

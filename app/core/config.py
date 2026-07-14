@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     CLOVA_OCR_INVOKE_URL: str = ""
     CLOVA_OCR_SECRET_KEY: str = ""
 
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    GOOGLE_DOCAI_PROJECT_ID: str = ""
+    GOOGLE_DOCAI_LOCATION: str = "us"
+    GOOGLE_DOCAI_PROCESSOR_ID: str = ""
+
     ANTHROPIC_API_KEY: str = ""
 
     class Config:
