@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
 from app.core.security import get_current_member
 from app.models.member import Member
@@ -7,6 +7,7 @@ from app.schemas.grade import (
     GradeBulkConfirmResponse,
     GradingProgressResponse,
     GradeResponse,
+    GradeCreateRequest,
     GradeUpdateRequest,
 )
 from app.schemas.job import JobStartedResponse
@@ -73,3 +74,23 @@ async def confirm_all_grades(
     service: GradeService = Depends(get_grade_service),
 ) -> ApiResponse[GradeBulkConfirmResponse]:
     return ApiResponse(data=service.confirm_all_grades(problem_id, current_member.member_id))
+
+
+@router.delete("/problems/{problem_id}/grades", status_code=204)
+async def delete_grades(
+    problem_id: int,
+    current_member: Member = Depends(get_current_member),
+    service: GradeService = Depends(get_grade_service),
+) -> Response:
+    service.delete_grades(problem_id, current_member.member_id)
+    return Response(status_code=204)
+
+@router.post("/problems/{problem_id}/students/{student_id}/grades", response_model=ApiResponse[GradeResponse])
+async def create_grade(
+    problem_id: int,
+    student_id: int,
+    request: GradeCreateRequest,
+    current_member: Member = Depends(get_current_member),
+    service: GradeService = Depends(get_grade_service),
+) -> ApiResponse[GradeResponse]:
+    return ApiResponse(data=service.create_grade(problem_id, student_id, current_member.member_id, request))

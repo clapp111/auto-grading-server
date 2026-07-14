@@ -7,6 +7,7 @@ from app.api.v1.router import api_router
 from app.core.exceptions import (
     AnswerRegionNotFoundError,
     AnswerSheetNotFoundError,
+    AutoGradeUnsupportedError,
     EmailAlreadyExistsError,
     ExamNotFoundError,
     ExamStepConflictError,
@@ -155,6 +156,14 @@ async def exam_step_conflict_handler(request: Request, exc: ExamStepConflictErro
     return JSONResponse(
         status_code=409,
         content={"data": None, "meta": None, "error": {"code": "EXAM_STEP_CONFLICT", "message": "시험의 현재 단계가 요청한 단계와 일치하지 않습니다."}},
+    )
+
+
+@app.exception_handler(AutoGradeUnsupportedError)
+async def auto_grade_unsupported_handler(request: Request, exc: AutoGradeUnsupportedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"data": None, "meta": None, "error": {"code": "AUTO_GRADE_UNSUPPORTED", "message": "객관식/단답형은 자동 채점을 지원하지 않습니다. 수작업으로 채점해주세요."}},
     )
 
 

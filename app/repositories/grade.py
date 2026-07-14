@@ -82,6 +82,13 @@ class GradeRepository:
         self.db.commit()
         return count
 
+    def get_by_problem_and_student(self, problem_id: int, student_id: int) -> Grade | None:
+        return (
+            self.db.query(Grade)
+            .filter(Grade.problem_id == problem_id, Grade.student_id == student_id)
+            .first()
+        )
+
     def delete_by_problem(self, problem_id: int) -> None:
         self.db.query(Grade).filter(Grade.problem_id == problem_id).delete(synchronize_session=False)
         self.db.commit()

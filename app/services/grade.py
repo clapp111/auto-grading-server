@@ -1,7 +1,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamNotFoundError, GradeNotFoundError, ProblemNotFoundError
+from app.core.exceptions import AutoGradeUnsupportedError, ExamNotFoundError, GradeNotFoundError, ProblemNotFoundError, StudentNotFoundError
 from app.db.session import get_db
 from app.enums.grade_method import GradeMethod
 from app.enums.grade_status import GradeStatus
@@ -20,6 +20,7 @@ from app.repositories.rubric import RubricRepository
 from app.repositories.student import StudentRepository
 from app.schemas.grade import (
     GradeBulkConfirmResponse,
+    GradeCreateRequest,
     GradingProgressResponse,
     GradeResponse,
     GradeUpdateRequest,
@@ -110,17 +111,18 @@ class GradeService:
         )
 
     def run_grade(self, exam_id: int, problem_id: int, member_id: int) -> JobStartedResponse:
-        from app.workers.grade_tasks import run_auto_grade, run_llm_grade
+        from app.workers.grade_tasks import run_llm_grade
 
         self._get_exam_or_raise(exam_id, member_id)
         problem = self._get_problem_or_raise(problem_id, member_id)
 
-        is_llm = problem.type in _LLM_TYPES
-        job_type = JobType.LLM_GRADE if is_llm else JobType.AUTO_GRADE
+        if problem.type not in _LLM_TYPES:
+            raise AutoGradeUnsupportedError()
+
         job = self.job_repo.create(
             exam_id=exam_id,
             problem_id=problem_id,
-            type=job_type,
+            type=JobType.LLM_GRADE,
             requested_by_member_id=member_id,
             input_json={
                 "scope": {"examId": exam_id, "problemId": problem_id},
@@ -131,10 +133,7 @@ class GradeService:
             },
         )
 
-        if is_llm:
-            run_llm_grade.delay(job.job_id)
-        else:
-            run_auto_grade.delay(job.job_id)
+        run_llm_grade.delay(job.job_id)
 
         self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
@@ -212,6 +211,31 @@ class GradeService:
         confirmed_count = self.grade_repo.confirm_all(problem_id)
         self.exam_repo.touch(exam_id)
         return GradeBulkConfirmResponse(confirmed_count=confirmed_count)
+
+    def delete_grades(self, problem_id: int, member_id: int) -> None:
+        problem = self._get_problem_or_raise(problem_id, member_id)
+        self.grade_repo.delete_by_problem(problem_id)
+        self.exam_repo.touch(problem.exam_id)
+
+    def create_grade(self, problem_id: int, student_id: int, member_id: int, request: GradeCreateRequest) -> GradeResponse:
+        problem = self._get_problem_or_raise(problem_id, member_id)
+        exam_id = problem.exam_id
+        student = self.student_repo.get_by_id(student_id)
+        if not student or student.exam_id != exam_id:
+            raise StudentNotFoundError()
+
+        existing = self.grade_repo.get_by_problem_and_student(problem_id, student_id)
+        if existing:
+            grade = self.grade_repo.update(existing, score=request.score)
+        else:
+            grade = self.grade_repo.create(
+                problem_id=problem_id,
+                student_id=student_id,
+                score=request.score,
+                method=GradeMethod.HUMAN
+            )
+        self.exam_repo.touch(exam_id)
+        return self._build_grade_response(grade, problem, exam_id)
 
 
 def _to_response(
