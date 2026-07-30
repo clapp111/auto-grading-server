@@ -1,8 +1,9 @@
-from sqlalchemy import delete, func, select, update as sa_update
+from sqlalchemy import delete, func, or_, select, update as sa_update
 from sqlalchemy.orm import Session
 
 from app.models.answer_sheet import AnswerSheet
 from app.models.exam import Exam
+from app.models.exam_member import ExamMember
 
 
 class ExamRepository:
@@ -12,6 +13,30 @@ class ExamRepository:
     def get_by_id(self, exam_id: int) -> Exam | None:
         return self.db.get(Exam, exam_id)
 
+    def _accessible_by(self, member_id: int):
+        # 소유자이거나 초대를 수락한 참여자. join 대신 EXISTS를 쓰는 이유는
+        # 참여자가 여러 명일 때 join이 같은 exam 행을 중복 반환하기 때문이다.
+        shared = (
+            select(ExamMember.exam_member_id)
+            .where(ExamMember.exam_id == Exam.exam_id, ExamMember.member_id == member_id)
+            .exists()
+        )
+        return or_(Exam.member_id == member_id, shared)
+
+    def get_accessible(self, exam_id: int, member_id: int) -> Exam | None:
+        return (
+            self.db.query(Exam)
+            .filter(Exam.exam_id == exam_id, self._accessible_by(member_id))
+            .first()
+        )
+
+    def get_owned(self, exam_id: int, member_id: int) -> Exam | None:
+        return (
+            self.db.query(Exam)
+            .filter(Exam.exam_id == exam_id, Exam.member_id == member_id)
+            .first()
+        )
+
     def list_by_member(
         self,
         member_id: int,
@@ -20,7 +45,7 @@ class ExamRepository:
         search: str | None,
         step: int | None,
     ) -> list[Exam]:
-        q = self.db.query(Exam).filter(Exam.member_id == member_id)
+        q = self.db.query(Exam).filter(self._accessible_by(member_id))
         if search:
             q = q.filter(Exam.name.ilike(f"%{search}%"))
         if step is not None:
@@ -32,7 +57,7 @@ class ExamRepository:
     def count_by_step(self, member_id: int) -> dict[str, int]:
         rows = (
             self.db.query(Exam.step, func.count(Exam.exam_id))
-            .filter(Exam.member_id == member_id)
+            .filter(self._accessible_by(member_id))
             .group_by(Exam.step)
             .all()
         )

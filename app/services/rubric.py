@@ -39,8 +39,8 @@ class RubricService:
         problem = self.problem_repo.get_by_id(problem_id)
         if not problem:
             raise ProblemNotFoundError()
-        exam = self.exam_repo.get_by_id(problem.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
             raise ProblemNotFoundError()
         return problem
 
@@ -51,8 +51,8 @@ class RubricService:
         problem = self.problem_repo.get_by_id(rubric.problem_id)
         if not problem:
             raise RubricNotFoundError()
-        exam = self.exam_repo.get_by_id(problem.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
             raise RubricNotFoundError()
         return rubric, problem.exam_id
 

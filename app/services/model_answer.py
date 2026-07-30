@@ -36,14 +36,14 @@ class ModelAnswerService:
         problem = self.problem_repo.get_by_id(problem_id)
         if not problem:
             raise ProblemNotFoundError()
-        exam = self.exam_repo.get_by_id(problem.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
             raise ProblemNotFoundError()
         return problem
 
     def issue_model_answer_url(self, exam_id: int, member_id: int, request: PresignedUrlRequest) -> PresignedUrlResponse:
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         file_key = self.storage.generate_key(f"exams/{exam_id}/model-answer", request.file_name)
         self.exam_repo.update(exam, model_answer_file_key=file_key)
@@ -77,8 +77,8 @@ class ModelAnswerService:
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
     def list_model_answers(self, exam_id: int, member_id: int) -> list[ModelAnswerResponse]:
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         problems = self.problem_repo.list_by_exam(exam_id)
         problem_ids = [p.problem_id for p in problems]
