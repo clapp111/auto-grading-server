@@ -43,9 +43,10 @@ def _make_sheet():
     sheet.answer_sheet_id = ANSWER_SHEET_ID
     sheet.exam_id = EXAM_ID
     sheet.student_id = STUDENT_ID
-    sheet.student = MagicMock(
-        student_id=STUDENT_ID, name="테스트 학생", student_no="20220002"
-    )
+    sheet.student = MagicMock()
+    sheet.student.student_id = STUDENT_ID
+    sheet.student.name = "테스트 학생"
+    sheet.student.student_no = "20220002"
     return sheet
 
 
@@ -77,11 +78,32 @@ def _make_ocr_result(layout_mode: LayoutMode = LayoutMode.FREE):
     return result
 
 
+def _make_ocr_service(
+    ocr_result_repo,
+    answer_region_repo,
+    answer_sheet_repo,
+    exam_repo,
+    student_repo,
+    problem_repo,
+    job_repo,
+):
+    return OcrService(
+        ocr_result_repo,
+        answer_region_repo,
+        answer_sheet_repo,
+        exam_repo,
+        student_repo,
+        problem_repo,
+        job_repo,
+    )
+
+
 class TestRegionServiceModeFiltering:
     def test_list_regions_uses_active_exam_layout_mode(self):
         answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         sheet = _make_sheet()
@@ -89,11 +111,16 @@ class TestRegionServiceModeFiltering:
         region = _make_region(LayoutMode.FREE)
 
         answer_sheet_repo.get_by_id.return_value = sheet
-        exam_repo.get_by_id.return_value = exam
+        exam_repo.get_accessible.return_value = exam
         answer_region_repo.list_by_answer_sheet.return_value = [region]
+        problem_repo.map_by_ids.return_value = {region.problem_id: region.problem}
 
         service = RegionService(
-            answer_region_repo, answer_sheet_repo, exam_repo, job_repo
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            problem_repo,
+            job_repo,
         )
         result = service.list_regions(ANSWER_SHEET_ID, MEMBER_ID)
 
@@ -107,6 +134,7 @@ class TestRegionServiceModeFiltering:
         answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         sheet = _make_sheet()
@@ -119,12 +147,18 @@ class TestRegionServiceModeFiltering:
         )
 
         answer_sheet_repo.get_by_id.return_value = sheet
-        exam_repo.get_by_id.return_value = exam
+        exam_repo.get_accessible.return_value = exam
         answer_region_repo.get_by_sheet_problem_and_mode.return_value = region
         answer_region_repo.get_by_id.return_value = region
+        answer_region_repo.update.return_value = region
+        problem_repo.get_by_id.return_value = region.problem
 
         service = RegionService(
-            answer_region_repo, answer_sheet_repo, exam_repo, job_repo
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            problem_repo,
+            job_repo,
         )
         service.create_region(ANSWER_SHEET_ID, MEMBER_ID, request)
 
@@ -140,6 +174,7 @@ class TestRegionServiceModeFiltering:
         answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         region = _make_region(LayoutMode.FIXED)
@@ -148,10 +183,14 @@ class TestRegionServiceModeFiltering:
 
         answer_region_repo.get_by_id.return_value = region
         answer_sheet_repo.get_by_id.return_value = sheet
-        exam_repo.get_by_id.return_value = exam
+        exam_repo.get_accessible.return_value = exam
 
         service = RegionService(
-            answer_region_repo, answer_sheet_repo, exam_repo, job_repo
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            problem_repo,
+            job_repo,
         )
 
         with pytest.raises(AnswerRegionNotFoundError):
@@ -163,25 +202,34 @@ class TestRegionServiceModeFiltering:
 class TestOcrServiceModeFiltering:
     def test_get_progress_counts_only_active_layout_mode(self):
         ocr_result_repo = MagicMock()
+        answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
         student_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         exam = _make_exam(LayoutMode.FIXED)
         sheet = _make_sheet()
 
-        exam_repo.get_by_id.return_value = exam
+        exam_repo.get_accessible.return_value = exam
         answer_sheet_repo.list_by_exam.return_value = [sheet]
-        ocr_result_repo.count_by_answer_sheet.return_value = (3, 2)
+        ocr_result_repo.count_by_answer_sheets.return_value = {ANSWER_SHEET_ID: (3, 2)}
+        student_repo.map_by_ids.return_value = {STUDENT_ID: sheet.student}
 
-        service = OcrService(
-            ocr_result_repo, answer_sheet_repo, exam_repo, student_repo, job_repo
+        service = _make_ocr_service(
+            ocr_result_repo,
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            student_repo,
+            problem_repo,
+            job_repo,
         )
         result = service.get_progress(EXAM_ID, MEMBER_ID, None)
 
-        ocr_result_repo.count_by_answer_sheet.assert_called_once_with(
-            ANSWER_SHEET_ID, LayoutMode.FIXED
+        ocr_result_repo.count_by_answer_sheets.assert_called_once_with(
+            [ANSWER_SHEET_ID], LayoutMode.FIXED
         )
         assert result.students[0].total_count == 3
         assert result.students[0].confirmed_count == 2
@@ -190,31 +238,45 @@ class TestOcrServiceModeFiltering:
         self,
     ):
         ocr_result_repo = MagicMock()
+        answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
         student_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         exam = _make_exam(LayoutMode.FIXED)
         exam.student_count = 5
         sheet = _make_sheet()
 
-        exam_repo.get_by_id.return_value = exam
+        exam_repo.get_accessible.return_value = exam
         answer_sheet_repo.list_by_exam.return_value = [sheet]
-        ocr_result_repo.count_by_answer_sheet.return_value = (3, 3)
+        ocr_result_repo.count_by_answer_sheets.return_value = {ANSWER_SHEET_ID: (3, 3)}
+        student_repo.map_by_ids.return_value = {STUDENT_ID: sheet.student}
 
-        service = OcrService(
-            ocr_result_repo, answer_sheet_repo, exam_repo, student_repo, job_repo
+        service = _make_ocr_service(
+            ocr_result_repo,
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            student_repo,
+            problem_repo,
+            job_repo,
         )
         result = service.get_progress(EXAM_ID, MEMBER_ID, None)
 
+        ocr_result_repo.count_by_answer_sheets.assert_called_once_with(
+            [ANSWER_SHEET_ID], LayoutMode.FIXED
+        )
         assert result.total_student_count == 1
 
     def test_list_results_filters_by_active_layout_mode(self):
         ocr_result_repo = MagicMock()
+        answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
         student_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         student = MagicMock()
@@ -225,11 +287,22 @@ class TestOcrServiceModeFiltering:
         result_row = _make_ocr_result(LayoutMode.FREE)
 
         student_repo.get_by_id.return_value = student
-        exam_repo.get_by_id.return_value = exam
-        ocr_result_repo.list_by_student.return_value = [result_row]
+        exam_repo.get_accessible.return_value = exam
+        ocr_result_repo.list_by_student.return_value = [
+            (result_row, result_row.answer_region)
+        ]
+        problem_repo.map_by_ids.return_value = {
+            result_row.answer_region.problem_id: result_row.answer_region.problem
+        }
 
-        service = OcrService(
-            ocr_result_repo, answer_sheet_repo, exam_repo, student_repo, job_repo
+        service = _make_ocr_service(
+            ocr_result_repo,
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            student_repo,
+            problem_repo,
+            job_repo,
         )
         result = service.list_ocr_results(STUDENT_ID, MEMBER_ID)
 
@@ -241,19 +314,30 @@ class TestOcrServiceModeFiltering:
 
     def test_update_result_rejects_inactive_layout_mode(self):
         ocr_result_repo = MagicMock()
+        answer_region_repo = MagicMock()
         answer_sheet_repo = MagicMock()
         exam_repo = MagicMock()
         student_repo = MagicMock()
+        problem_repo = MagicMock()
         job_repo = MagicMock()
 
         result_row = _make_ocr_result(LayoutMode.FIXED)
         exam = _make_exam(LayoutMode.FREE)
+        region = result_row.answer_region
 
         ocr_result_repo.get_by_id.return_value = result_row
-        exam_repo.get_by_id.return_value = exam
+        answer_region_repo.get_by_id.return_value = region
+        answer_sheet_repo.get_by_id.return_value = region.answer_sheet
+        exam_repo.get_accessible.return_value = exam
 
-        service = OcrService(
-            ocr_result_repo, answer_sheet_repo, exam_repo, student_repo, job_repo
+        service = _make_ocr_service(
+            ocr_result_repo,
+            answer_region_repo,
+            answer_sheet_repo,
+            exam_repo,
+            student_repo,
+            problem_repo,
+            job_repo,
         )
 
         with pytest.raises(OcrResultNotFoundError):
