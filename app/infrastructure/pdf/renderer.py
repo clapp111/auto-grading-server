@@ -1,7 +1,9 @@
 import fitz  # PyMuPDF
 
 
-def crop_region(pdf_bytes: bytes, page: int, x: float, y: float, w: float, h: float) -> bytes:
+def crop_region(
+    pdf_bytes: bytes, page: int, x: float, y: float, w: float, h: float
+) -> bytes:
     """PDF에서 지정 region을 JPEG 바이트로 반환한다.
 
     page: 1-indexed 페이지 번호

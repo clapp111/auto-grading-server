@@ -32,7 +32,9 @@ class GoogleDocAiOcrClient(OcrClient):
         mime_type = mimetypes.guess_type(f"file.{file_format}")[0] or "image/jpeg"
         request = documentai.ProcessRequest(
             name=self._processor_name,
-            raw_document=documentai.RawDocument(content=image_data, mime_type=mime_type),
+            raw_document=documentai.RawDocument(
+                content=image_data, mime_type=mime_type
+            ),
         )
         result = self._client.process_document(request=request)
         return result.document.text

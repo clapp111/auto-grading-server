@@ -9,11 +9,15 @@ from app.enums.role import Role
 class Member(Base):
     __tablename__ = "member"
 
-    member_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    member_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     profile_key: Mapped[str | None] = mapped_column(String, nullable=True)
     affiliation: Mapped[str | None] = mapped_column(String, nullable=True)
-    affiliation_role: Mapped[AffiliationRole] = mapped_column(SAEnum(AffiliationRole), nullable=False)
+    affiliation_role: Mapped[AffiliationRole] = mapped_column(
+        SAEnum(AffiliationRole), nullable=False
+    )
     role: Mapped[Role] = mapped_column(SAEnum(Role), nullable=False)

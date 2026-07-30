@@ -28,7 +28,9 @@ class ProblemRepository:
         max_score: int,
         region: dict | None = None,
     ) -> Problem:
-        problem = Problem(exam_id=exam_id, label=label, type=type, max_score=max_score, region=region)
+        problem = Problem(
+            exam_id=exam_id, label=label, type=type, max_score=max_score, region=region
+        )
         self.db.add(problem)
         self.db.commit()
         self.db.refresh(problem)
@@ -42,7 +44,9 @@ class ProblemRepository:
         return problem
 
     def map_by_ids(self, problem_ids: list[int]) -> dict[int, Problem]:
-        problems = self.db.query(Problem).filter(Problem.problem_id.in_(problem_ids)).all()
+        problems = (
+            self.db.query(Problem).filter(Problem.problem_id.in_(problem_ids)).all()
+        )
         return {p.problem_id: p for p in problems}
 
     def delete(self, problem: Problem) -> None:

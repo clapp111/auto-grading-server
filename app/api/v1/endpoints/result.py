@@ -25,7 +25,10 @@ async def get_exam_results(
     return ApiResponse(data=service.get_exam_results(exam_id, current_member.member_id))
 
 
-@router.get("/exams/{exam_id}/results/statistics", response_model=ApiResponse[ExamStatisticsResponse])
+@router.get(
+    "/exams/{exam_id}/results/statistics",
+    response_model=ApiResponse[ExamStatisticsResponse],
+)
 async def get_statistics(
     exam_id: int,
     current_member: Member = Depends(get_current_member),
@@ -34,14 +37,19 @@ async def get_statistics(
     return ApiResponse(data=service.get_statistics(exam_id, current_member.member_id))
 
 
-@router.get("/exams/{exam_id}/students/{student_id}/result", response_model=ApiResponse[StudentDetailResultResponse])
+@router.get(
+    "/exams/{exam_id}/students/{student_id}/result",
+    response_model=ApiResponse[StudentDetailResultResponse],
+)
 async def get_student_result(
     exam_id: int,
     student_id: int,
     current_member: Member = Depends(get_current_member),
     service: ResultService = Depends(get_result_service),
 ) -> ApiResponse[StudentDetailResultResponse]:
-    return ApiResponse(data=service.get_student_result(student_id, exam_id, current_member.member_id))
+    return ApiResponse(
+        data=service.get_student_result(student_id, exam_id, current_member.member_id)
+    )
 
 
 @router.get("/exams/{exam_id}/results/export")
@@ -55,5 +63,7 @@ async def export_results_csv(
     return StreamingResponse(
         iter([content]),
         media_type="text/csv; charset=utf-8-sig",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
     )

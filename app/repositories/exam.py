@@ -18,7 +18,9 @@ class ExamRepository:
         # 참여자가 여러 명일 때 join이 같은 exam 행을 중복 반환하기 때문이다.
         shared = (
             select(ExamMember.exam_member_id)
-            .where(ExamMember.exam_id == Exam.exam_id, ExamMember.member_id == member_id)
+            .where(
+                ExamMember.exam_id == Exam.exam_id, ExamMember.member_id == member_id
+            )
             .exists()
         )
         return or_(Exam.member_id == member_id, shared)
@@ -76,7 +78,9 @@ class ExamRepository:
         return exam
 
     def touch(self, exam_id: int) -> None:
-        self.db.execute(sa_update(Exam).where(Exam.exam_id == exam_id).values(updated_at=func.now()))
+        self.db.execute(
+            sa_update(Exam).where(Exam.exam_id == exam_id).values(updated_at=func.now())
+        )
         self.db.commit()
 
     def update(self, exam: Exam, **kwargs) -> Exam:
@@ -90,7 +94,9 @@ class ExamRepository:
         return list(
             self.db.execute(
                 select(AnswerSheet.file_key).where(AnswerSheet.exam_id == exam_id)
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     def delete(self, exam_id: int) -> None:

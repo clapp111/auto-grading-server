@@ -26,7 +26,9 @@ class InvitationRepository:
             .first()
         )
 
-    def list_received_with_context(self, invitee_member_id: int, status: InvitationStatus | None) -> list[tuple[Invitation, Exam, Member]]:
+    def list_received_with_context(
+        self, invitee_member_id: int, status: InvitationStatus | None
+    ) -> list[tuple[Invitation, Exam, Member]]:
         q = (
             self.db.query(Invitation, Exam, Member)
             .join(Exam, Invitation.exam_id == Exam.exam_id)
@@ -37,7 +39,9 @@ class InvitationRepository:
             q = q.filter(Invitation.status == status)
         return q.order_by(Invitation.invitation_id.desc()).all()
 
-    def list_by_exam_with_invitee(self, exam_id: int, status: InvitationStatus | None) -> list[tuple[Invitation, Member]]:
+    def list_by_exam_with_invitee(
+        self, exam_id: int, status: InvitationStatus | None
+    ) -> list[tuple[Invitation, Member]]:
         q = (
             self.db.query(Invitation, Member)
             .join(Member, Invitation.invitee_member_id == Member.member_id)
@@ -47,7 +51,9 @@ class InvitationRepository:
             q = q.filter(Invitation.status == status)
         return q.order_by(Invitation.invitation_id.desc()).all()
 
-    def create(self, exam_id: int, inviter_member_id: int, invitee_member_id: int) -> Invitation:
+    def create(
+        self, exam_id: int, inviter_member_id: int, invitee_member_id: int
+    ) -> Invitation:
         invitation = Invitation(
             exam_id=exam_id,
             inviter_member_id=inviter_member_id,
@@ -59,7 +65,9 @@ class InvitationRepository:
         self.db.refresh(invitation)
         return invitation
 
-    def update_status(self, invitation: Invitation, status: InvitationStatus) -> Invitation:
+    def update_status(
+        self, invitation: Invitation, status: InvitationStatus
+    ) -> Invitation:
         invitation.status = status
         invitation.responded_at = datetime.now(timezone.utc)
         self.db.commit()

@@ -7,6 +7,7 @@ T = TypeVar("T")
 
 # ── 좌표 / 영역 ────────────────────────────────────────────────
 
+
 class Region(BaseModel):
     page: int
     x: float
@@ -22,6 +23,7 @@ class Point(BaseModel):
 
 
 # ── 페이지네이션 메타 ───────────────────────────────────────────
+
 
 class PageMeta(BaseModel):
     type: str = Field(default="page")
@@ -53,6 +55,7 @@ class CursorMeta(BaseModel):
 
 # ── 에러 ───────────────────────────────────────────────────────
 
+
 class ApiError(BaseModel):
     code: str
     message: str
@@ -61,6 +64,7 @@ class ApiError(BaseModel):
 
 # ── 공통 응답 래퍼 ─────────────────────────────────────────────
 # Pydantic v2: GenericModel 제거됨 → BaseModel + Generic[T] 직접 상속
+
 
 class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = None

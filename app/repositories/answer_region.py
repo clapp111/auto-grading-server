@@ -35,9 +35,8 @@ class AnswerRegionRepository:
         answer_sheet_id: int,
         layout_mode: LayoutMode | None = None,
     ) -> list[AnswerRegion]:
-        query = (
-            self.db.query(AnswerRegion)
-            .filter(AnswerRegion.answer_sheet_id == answer_sheet_id)
+        query = self.db.query(AnswerRegion).filter(
+            AnswerRegion.answer_sheet_id == answer_sheet_id
         )
         if layout_mode is not None:
             query = query.filter(AnswerRegion.layout_mode == layout_mode)

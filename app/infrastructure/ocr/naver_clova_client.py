@@ -14,11 +14,13 @@ class ClovaOcrClient(OcrClient):
             "version": "V2",
             "requestId": str(uuid.uuid4()),
             "timestamp": int(time.time() * 1000),
-            "images": [{
-                "format": file_format,
-                "name": "ocr_target",
-                "data": base64.b64encode(image_data).decode(),
-            }],
+            "images": [
+                {
+                    "format": file_format,
+                    "name": "ocr_target",
+                    "data": base64.b64encode(image_data).decode(),
+                }
+            ],
         }
         response = requests.post(
             settings.CLOVA_OCR_INVOKE_URL,
