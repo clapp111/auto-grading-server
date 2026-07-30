@@ -1,0 +1,44 @@
+name: AI Review
+
+on:
+  pull_request:
+    branches: [dev]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            이 저장소는 FastAPI + SQLAlchemy + Celery 기반 자동 채점 서버입니다.
+            현재 PR의 변경 사항(diff)만 리뷰하세요. 전체 코드베이스를 리뷰하지 마세요.
+
+            리뷰 기준은 저장소 루트의 CLAUDE.md에 정의된 규칙을 최우선으로 따르세요.
+            특히 다음을 중점 확인하세요:
+              - 레이어 분리(Router → Service → Repository 단방향, 역참조 금지)
+              - 응답 형식(ApiResponse[T] 래핑, 202/204 규칙)
+              - 예외 처리(도메인 예외만 사용, 인라인 HTTPException 금지,
+                새 예외는 exceptions.py 정의 + main.py 핸들러 등록 여부)
+              - 소유권 검증(member_id 비교, 존재 여부 노출 금지)
+              - SQLAlchemy 모델 컨벤션(Mapped/mapped_column, SAEnum, N+1 방지)
+              - Celery Job 상태 흐름/에러 처리/progress_json commit 주기
+              - 네이밍(엔드포인트/스키마/Enum) 규칙
+
+            발견한 문제는 심각도(Critical / Warning / Nitpick)를 표시해
+            해당 라인에 인라인 코멘트로 남기세요. 문제가 없으면 간단히 승인 요약만 남기세요.
+            리뷰 언어는 한국어로 작성하세요.
+          claude_args: |
+            --max-turns 20
