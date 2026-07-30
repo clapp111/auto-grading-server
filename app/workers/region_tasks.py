@@ -93,15 +93,14 @@ def apply_region_template(self, job_id: int):
                     )
                 )
 
-            if index % max(1, total // 10) == 0 or index == total:
+            if index % max(1, (total + 9) // 10) == 0 or index == total:
                 job.progress_json = _build_progress(
                     index,
                     total,
                     "APPLYING",
                     f"{index}/{total} 답안지에 템플릿을 적용 중입니다.",
                 )
-
-            db.commit()
+                db.commit()
 
         job.status = JobStatus.DONE
         job.completed_at = datetime.now(timezone.utc)
@@ -115,6 +114,7 @@ def apply_region_template(self, job_id: int):
         db.commit()
 
     except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+        db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(
             0, 0, "FAILED", "템플릿 적용에 실패했습니다."

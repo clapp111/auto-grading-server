@@ -246,6 +246,7 @@ def run_student_id_ocr(self, job_id: int):
         matched = 0
         failed = 0
         failed_targets: list[dict] = []
+        recognized: list[tuple[AnswerSheet, str, str]] = []
 
         job.progress_json = _build_progress(
             0, total, "OCR", "학생 식별 OCR을 시작합니다."
@@ -284,47 +285,7 @@ def run_student_id_ocr(self, job_id: int):
                     }
                 )
             else:
-                student = (
-                    db.query(Student)
-                    .filter(
-                        Student.exam_id == exam.exam_id, Student.student_no == ocr_no
-                    )
-                    .first()
-                )
-
-                if student is None:
-                    student = Student(
-                        exam_id=exam.exam_id,
-                        name=ocr_name or ocr_no,
-                        student_no=ocr_no,
-                    )
-                    db.add(student)
-                    db.flush()
-                elif ocr_name and student.name != ocr_name:
-                    student.name = ocr_name
-
-                duplicate_sheet = (
-                    db.query(AnswerSheet)
-                    .filter(
-                        AnswerSheet.exam_id == exam.exam_id,
-                        AnswerSheet.student_id == student.student_id,
-                        AnswerSheet.answer_sheet_id != sheet.answer_sheet_id,
-                    )
-                    .first()
-                )
-                if duplicate_sheet:
-                    failed += 1
-                    failed_targets.append(
-                        {
-                            "answerSheetId": sheet.answer_sheet_id,
-                            "reason": "DUPLICATE_STUDENT_ID",
-                            "ocrName": ocr_name,
-                        }
-                    )
-                else:
-                    sheet.student_id = student.student_id
-                    sheet.status = SheetStatus.MATCHED
-                    matched += 1
+                recognized.append((sheet, ocr_name, ocr_no))
 
             if index % max(1, total // 10) == 0 or index == total:
                 job.progress_json = _build_progress(
@@ -334,6 +295,66 @@ def run_student_id_ocr(self, job_id: int):
                     f"{index}/{total} 답안지의 학생 정보를 인식 중입니다.",
                 )
                 db.commit()
+
+        student_nos = list({ocr_no for _, _, ocr_no in recognized})
+        students = []
+        if student_nos:
+            students = (
+                db.query(Student)
+                .filter(
+                    Student.exam_id == exam.exam_id,
+                    Student.student_no.in_(student_nos),
+                )
+                .all()
+            )
+        student_by_no = {student.student_no: student for student in students}
+
+        for _, ocr_name, ocr_no in recognized:
+            if ocr_no not in student_by_no:
+                student = Student(
+                    exam_id=exam.exam_id,
+                    name=ocr_name or ocr_no,
+                    student_no=ocr_no,
+                )
+                db.add(student)
+                student_by_no[ocr_no] = student
+
+        db.flush()
+
+        student_ids = [student.student_id for student in student_by_no.values()]
+        occupied_student_ids: set[int] = set()
+        if student_ids:
+            occupied_student_ids = {
+                student_id
+                for (student_id,) in (
+                    db.query(AnswerSheet.student_id)
+                    .filter(
+                        AnswerSheet.exam_id == exam.exam_id,
+                        AnswerSheet.student_id.in_(student_ids),
+                    )
+                    .all()
+                )
+            }
+
+        for sheet, ocr_name, ocr_no in recognized:
+            student = student_by_no[ocr_no]
+            if student.student_id in occupied_student_ids:
+                failed += 1
+                failed_targets.append(
+                    {
+                        "answerSheetId": sheet.answer_sheet_id,
+                        "reason": "DUPLICATE_STUDENT_ID",
+                        "ocrName": ocr_name,
+                    }
+                )
+                continue
+
+            if ocr_name and student.name != ocr_name:
+                student.name = ocr_name
+            sheet.student_id = student.student_id
+            sheet.status = SheetStatus.MATCHED
+            occupied_student_ids.add(student.student_id)
+            matched += 1
 
         job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
