@@ -345,7 +345,7 @@ class ResultService:
 
 
 def _build_distribution(totals: list[int], max_total: int) -> list[ScoreBandItem]:
-    """총점 목록을 5개 점수 구간으로 나눠 분포를 만든다.
+    """총점 목록을 최대 5개 점수 구간으로 나눠 분포를 만든다.
 
     최고점을 5등분한 구간별로 학생 수를 센다. 총점이 없거나 만점이 0이면 빈 목록을 반환한다.
 
@@ -362,6 +362,8 @@ def _build_distribution(totals: list[int], max_total: int) -> list[ScoreBandItem
     items = []
     for i in range(5):
         lo = i * band_size
+        if lo > max_total:
+            break
         hi = lo + band_size - 1 if i < 4 else max_total
         items.append(
             ScoreBandItem(
