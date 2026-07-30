@@ -214,7 +214,6 @@ except Exception as e:
 - SQLAlchemy에서 `SAEnum(EnumClass)` 형태로 사용
 - `ExamStep`은 진행 단계(0~7)를 나타내는 `IntEnum`. 순서 비교가 필요하므로 `str, Enum`이 아닌 `IntEnum` 사용
 - 기존 Enum 목록:
-  - `ExamStatus`: DRAFT, SETUP, OCR, GRADING, DONE
   - `ExamStep` (IntEnum): DRAFT(0), PROBLEM_SETUP(1), RUBRIC(2), ANSWER_UPLOAD(3), REGION_SETUP(4), OCR(5), GRADING(6), DONE(7)
   - `JobStatus`: PENDING, RUNNING, DONE, FAILED, CANCELED
   - `JobType`: PROBLEM_OCR, MODEL_ANSWER_OCR, RUBRIC_SUGGEST, ANSWER_SHEET_RECOGNIZE, REGION_TEMPLATE_APPLY, ANSWER_OCR_RUN, AUTO_GRADE, LLM_GRADE, EXPORT_CSV

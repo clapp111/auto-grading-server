@@ -169,7 +169,7 @@ class ExamService:
         """시험을 다음 진행 단계로 넘긴다.
 
         클라이언트가 인식한 현재 단계(from_step)를 기준으로 검증한 뒤 `from_step + 1`로
-        전진시킨다. 서버의 현재 단계가 from_step보다 뒤처져 있으면 충돌로 처리한다.
+        전진시킨다. 서버의 현재 단계가 from_step과 일치하지 않으면 충돌로 처리한다.
 
         Args:
             exam_id: 단계를 전진시킬 시험 ID
@@ -186,7 +186,7 @@ class ExamService:
         exam = self.repo.get_accessible(exam_id, member_id)
         if not exam:
             raise ExamNotFoundError()
-        if exam.step < from_step:
+        if exam.step != from_step:
             raise ExamStepConflictError()
         exam = self.repo.update(exam, step=from_step + 1)
         return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
