@@ -79,7 +79,9 @@ def run_problem_ocr(self, job_id: int):
     except requests.exceptions.RequestException as e:
         raise self.retry(exc=e, countdown=2**self.request.retries)
 
-    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "문제 OCR에 실패했습니다.")
@@ -168,7 +170,9 @@ def run_model_answer_ocr(self, job_id: int):
     except requests.exceptions.RequestException as e:
         raise self.retry(exc=e, countdown=2**self.request.retries)
 
-    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(
@@ -393,7 +397,9 @@ def run_student_id_ocr(self, job_id: int):
     except requests.exceptions.RequestException as e:
         raise self.retry(exc=e, countdown=2**self.request.retries)
 
-    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(
@@ -573,7 +579,9 @@ def run_answer_ocr(self, job_id: int):
             except requests.exceptions.RequestException:
                 raise  # 외부 except로 전파 → self.retry() 호출
 
-            except Exception as e:  # noqa: BLE001 - Record a failed region and continue the remaining OCR targets.
+            except (
+                Exception
+            ) as e:  # noqa: BLE001 - Record a failed region and continue the remaining OCR targets.
                 failed += 1
                 failed_targets.append(
                     {
@@ -620,7 +628,9 @@ def run_answer_ocr(self, job_id: int):
     except requests.exceptions.RequestException as e:
         raise self.retry(exc=e, countdown=2**self.request.retries)
 
-    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "답안 OCR에 실패했습니다.")
