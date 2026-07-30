@@ -1,4 +1,4 @@
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -44,12 +44,12 @@ class OffsetMeta(BaseModel):
     type: str = Field(default="offset")
     offset: int
     limit: int
-    total: Optional[int] = None
+    total: int | None = None
 
 
 class CursorMeta(BaseModel):
     type: str = Field(default="cursor")
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
     has_more: bool
 
 
@@ -59,7 +59,7 @@ class CursorMeta(BaseModel):
 class ApiError(BaseModel):
     code: str
     message: str
-    field: Optional[str] = None
+    field: str | None = None
 
 
 # ── 공통 응답 래퍼 ─────────────────────────────────────────────
@@ -67,6 +67,6 @@ class ApiError(BaseModel):
 
 
 class ApiResponse(BaseModel, Generic[T]):
-    data: Optional[T] = None
-    meta: Optional[Any] = None
-    error: Optional[ApiError] = None
+    data: T | None = None
+    meta: Any | None = None
+    error: ApiError | None = None

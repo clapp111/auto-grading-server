@@ -14,8 +14,8 @@ from app.enums.grade_status import GradeStatus
 from app.enums.job_type import JobType
 from app.enums.problem_type import ProblemType
 from app.models.grade import Grade
-from app.models.rubric import Rubric
 from app.models.ocr_result import OCRResult
+from app.models.rubric import Rubric
 from app.repositories.exam import ExamRepository
 from app.repositories.grade import GradeRepository
 from app.repositories.job import JobRepository
@@ -27,9 +27,9 @@ from app.repositories.student import StudentRepository
 from app.schemas.grade import (
     GradeBulkConfirmResponse,
     GradeCreateRequest,
-    GradingProgressResponse,
     GradeResponse,
     GradeUpdateRequest,
+    GradingProgressResponse,
     ProblemGradingItem,
     RubricResultItem,
 )

@@ -34,6 +34,7 @@ def run_llm_grade(self, job_id: int):
         RateLimitError: Claude 레이트리밋으로 재시도가 필요한 경우 (선형 백오프)
     """
     import anthropic
+
     import app.db.models  # noqa: F401
     from app.core.config import settings
     from app.db.session import SessionLocal
@@ -172,16 +173,15 @@ def run_llm_grade(self, job_id: int):
         with ThreadPoolExecutor(max_workers=min(total, 5)) as executor:
             future_to_target = {executor.submit(_grade_one, t): t for t in targets}
             completed = 0
-            for future in as_completed(future_to_target):
+            for completed, future in enumerate(as_completed(future_to_target), start=1):
                 t = future_to_target[future]
-                completed += 1
                 try:
                     student_id, result = future.result()
                     grade_results[student_id] = result
                 except (anthropic.APIConnectionError, anthropic.RateLimitError) as e:
                     if pending_retry is None:
                         pending_retry = e
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - Record an individual grading failure and continue the batch.
                     grade_errors[t["student_id"]] = str(e)
 
                 job.progress_json = _build_progress(
@@ -278,7 +278,7 @@ def run_llm_grade(self, job_id: int):
     except anthropic.RateLimitError as e:
         raise self.retry(exc=e, countdown=30 * (self.request.retries + 1))
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "LLM 채점에 실패했습니다.")
         job.error_json = {

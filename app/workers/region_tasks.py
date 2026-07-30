@@ -114,7 +114,7 @@ def apply_region_template(self, job_id: int):
         }
         db.commit()
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(
             0, 0, "FAILED", "템플릿 적용에 실패했습니다."

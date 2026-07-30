@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 
 from app.enums.problem_type import ProblemType
-from app.enums.programming_language import ProgrammingLanguage
 from app.models.problem import Problem
 
 

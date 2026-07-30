@@ -9,9 +9,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from app.core.config import settings  # noqa: E402
-from app.db.base import Base  # noqa: E402
-import app.db.models  # noqa: F401, E402 — side-effect: registers all models with Base.metadata
+import app.db.models  # noqa: F401 — side-effect: registers all models with Base.metadata
+from app.core.config import settings
+from app.db.base import Base
 
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 

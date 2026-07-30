@@ -1,11 +1,13 @@
 from sqlalchemy import (
+    JSON,
     BigInteger,
-    Enum as SAEnum,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

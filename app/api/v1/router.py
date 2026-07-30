@@ -1,19 +1,19 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    answer_region,
+    answer_sheet,
     auth,
     exam,
-    problem,
+    grade,
+    invitation,
+    job,
     member,
     model_answer,
-    rubric,
-    answer_sheet,
-    answer_region,
     ocr_result,
-    grade,
-    job,
+    problem,
     result,
-    invitation,
+    rubric,
 )
 
 api_router = APIRouter()

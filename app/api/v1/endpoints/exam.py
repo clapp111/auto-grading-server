@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from app.core.security import get_current_member
 from app.models.member import Member
 from app.schemas.answer_region import AnswerRegionResponse, RegionTemplateRequest
-from app.schemas.common import ApiResponse, CursorMeta
+from app.schemas.common import ApiResponse
 from app.schemas.exam import (
     ExamAdvanceRequest,
     ExamCreateRequest,

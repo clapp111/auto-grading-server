@@ -6,8 +6,8 @@
 """
 
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,8 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from app.workers.rubric_tasks import _call_claude_for_rubric
 

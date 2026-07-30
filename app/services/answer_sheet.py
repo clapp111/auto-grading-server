@@ -22,7 +22,7 @@ from app.schemas.answer_sheet import (
     UploadCompleteResponse,
 )
 from app.schemas.job import JobStartedResponse
-from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
+from app.schemas.s3 import PresignedUrlRequest
 
 
 class AnswerSheetService:

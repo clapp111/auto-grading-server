@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ExamNotFoundError, ExamStepConflictError
 from app.db.session import get_db
-
 from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url

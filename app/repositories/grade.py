@@ -1,8 +1,8 @@
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.enums.grade_status import GradeStatus
 from app.enums.grade_method import GradeMethod
+from app.enums.grade_status import GradeStatus
 from app.models.grade import Grade
 from app.models.student import Student
 

@@ -114,7 +114,7 @@ def suggest_rubric_task(self, job_id: int):
         }
         db.commit()
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(
             0, 0, "FAILED", "루브릭 추천에 실패했습니다."
@@ -183,6 +183,7 @@ def _call_claude_for_rubric(
         ValueError: Claude 응답에서 채점 기준을 받지 못한 경우
     """
     import json
+
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)

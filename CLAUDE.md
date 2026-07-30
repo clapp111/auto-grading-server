@@ -385,7 +385,9 @@ Raises:
 ### 종합 예시 — 서비스
 
 ```python
-def create_invitation(self, exam_id: int, member_id: int, request: InvitationCreateRequest) -> ExamInvitationResponse:
+def create_invitation(
+    self, exam_id: int, member_id: int, request: InvitationCreateRequest
+) -> ExamInvitationResponse:
     """시험에 참여자를 초대한다.
 
     소유자만 초대할 수 있으며, 이미 참여 중이거나 대기 중인 초대가 있으면 거부한다.

@@ -1,4 +1,5 @@
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Index, String, text
+from sqlalchemy import BigInteger, ForeignKey, Index, String, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base

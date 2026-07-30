@@ -1,4 +1,5 @@
-from sqlalchemy import delete, func, or_, select, update as sa_update
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from app.models.answer_sheet import AnswerSheet

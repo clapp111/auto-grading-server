@@ -6,14 +6,14 @@ Create Date: 2026-07-30 00:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
 revision: str = "b7c8d9e0f1a2"
-down_revision: Union[str, None] = "a3b4c5d6e7f8"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "a3b4c5d6e7f8"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # PostgreSQL은 FK 제약조건에 인덱스를 자동 생성하지 않는다.

@@ -8,7 +8,6 @@ from app.core.exceptions import (
 )
 from app.db.session import get_db
 from app.enums.job_type import JobType
-from app.enums.layout_mode import LayoutMode
 from app.models.answer_region import AnswerRegion
 from app.repositories.answer_region import AnswerRegionRepository
 from app.repositories.answer_sheet import AnswerSheetRepository

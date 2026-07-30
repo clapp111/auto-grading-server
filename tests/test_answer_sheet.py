@@ -5,8 +5,8 @@ DB / Celery 없이 Mock으로 서비스 레이어를 검증합니다.
 실행: pytest tests/test_answer_sheet_id_region.py -v
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -14,13 +14,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
 from app.enums.sheet_status import SheetStatus
-from app.schemas.answer_sheet import IdRegionSaveRequest, AnswerSheetPatchRequest
+from app.schemas.answer_sheet import AnswerSheetPatchRequest, IdRegionSaveRequest
 from app.schemas.common import Region
 from app.schemas.s3 import PresignedUrlRequest
 from app.services.answer_sheet import AnswerSheetService
@@ -132,7 +133,7 @@ class TestIssueUploadUrl:
         )
 
     def test_returns_presigned_url_and_file_key(self, service_with_mocks):
-        svc, mocks = service_with_mocks
+        svc, _ = service_with_mocks
         req = PresignedUrlRequest(
             file_name="홍길동_답안지.pdf", content_type="application/pdf"
         )
@@ -184,7 +185,7 @@ class TestSaveIdRegions:
     def test_dispatches_celery_task_with_job_id(
         self, service_with_mocks, id_region_req
     ):
-        svc, mocks = service_with_mocks
+        svc, _ = service_with_mocks
 
         with patch("app.workers.ocr_tasks.run_student_id_ocr") as mock_task:
             mock_task.delay.return_value = None
@@ -193,7 +194,7 @@ class TestSaveIdRegions:
         mock_task.delay.assert_called_once_with(JOB_ID)
 
     def test_returns_job_started_response(self, service_with_mocks, id_region_req):
-        svc, mocks = service_with_mocks
+        svc, _ = service_with_mocks
 
         with patch("app.workers.ocr_tasks.run_student_id_ocr") as mock_task:
             mock_task.delay.return_value = None
