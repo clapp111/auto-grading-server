@@ -38,4 +38,6 @@ auto-grading-502413-827debdf3128.json
 
 # Deployment
 # GitHub Actions: 배포 시 삭제
-.github/workflows/
+.github/workflows/ci.yml
+.github/workflows/cd-dev.yml
+.github/workflows/cd-prod.yml

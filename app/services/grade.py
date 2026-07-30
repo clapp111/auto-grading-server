@@ -54,8 +54,8 @@ class GradeService:
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         return exam
 
@@ -63,8 +63,8 @@ class GradeService:
         problem = self.problem_repo.get_by_id(problem_id)
         if not problem:
             raise ProblemNotFoundError()
-        exam = self.exam_repo.get_by_id(problem.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
             raise ProblemNotFoundError()
         return problem
 
@@ -75,8 +75,8 @@ class GradeService:
         problem = self.problem_repo.get_by_id(grade.problem_id)
         if not problem:
             raise GradeNotFoundError()
-        exam = self.exam_repo.get_by_id(problem.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
             raise GradeNotFoundError()
         return grade
 

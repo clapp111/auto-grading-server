@@ -45,8 +45,8 @@ class OcrService:
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         return exam
 
@@ -60,8 +60,8 @@ class OcrService:
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
         if not sheet:
             raise OcrResultNotFoundError()
-        exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
+        exam = self.exam_repo.get_accessible(sheet.exam_id, member_id)
+        if not exam or region.layout_mode != exam.layout_mode:
             raise OcrResultNotFoundError()
         return ocr_result, region
 
@@ -128,8 +128,8 @@ class OcrService:
         student = self.student_repo.get_by_id(student_id)
         if not student:
             raise StudentNotFoundError()
-        exam = self.exam_repo.get_by_id(student.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(student.exam_id, member_id)
+        if not exam:
             raise StudentNotFoundError()
 
         results = self.ocr_result_repo.list_by_student(student_id, exam.layout_mode)

@@ -29,3 +29,17 @@ class GradeNotFoundError(Exception): pass
 class ExamStepConflictError(Exception): pass
 
 class AutoGradeUnsupportedError(Exception): pass
+
+class MemberNotFoundError(Exception): pass
+
+class InvitationNotFoundError(Exception): pass
+
+class SelfInvitationError(Exception): pass
+
+class AlreadyExamMemberError(Exception): pass
+
+class InvitationAlreadyRespondedError(Exception): pass
+
+class InvitationAlreadyPendingError(Exception): pass
+
+class ExamOwnerRequiredError(Exception): pass

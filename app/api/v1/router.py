@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     grade,
     job,
     result,
+    invitation,
 )
 
 api_router = APIRouter()
@@ -31,3 +32,5 @@ api_router.include_router(ocr_result.router)
 api_router.include_router(grade.router)
 api_router.include_router(job.router)
 api_router.include_router(result.router)
+api_router.include_router(invitation.router)
+api_router.include_router(invitation.exam_router)

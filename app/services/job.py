@@ -17,8 +17,8 @@ class JobService:
         job = self.repo.get_by_id(job_id)
         if not job:
             raise JobNotFoundError()
-        exam = self.exam_repo.get_by_id(job.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(job.exam_id, member_id)
+        if not exam:
             raise JobNotFoundError()
         return JobResponse.model_validate(job)
 

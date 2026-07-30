@@ -37,8 +37,8 @@ class RegionService:
         self.job_repo = job_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         return exam
 
@@ -49,8 +49,8 @@ class RegionService:
         sheet = self.answer_sheet_repo.get_by_id(region.answer_sheet_id)
         if not sheet:
             raise AnswerRegionNotFoundError()
-        exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id or region.layout_mode != exam.layout_mode:
+        exam = self.exam_repo.get_accessible(sheet.exam_id, member_id)
+        if not exam or region.layout_mode != exam.layout_mode:
             raise AnswerRegionNotFoundError()
         return region
 
@@ -58,8 +58,8 @@ class RegionService:
         sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
         if not sheet:
             raise AnswerSheetNotFoundError()
-        exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(sheet.exam_id, member_id)
+        if not exam:
             raise AnswerSheetNotFoundError()
         regions = self.answer_region_repo.list_by_answer_sheet(answer_sheet_id, exam.layout_mode)
         problem_map = self.problem_repo.map_by_ids([r.problem_id for r in regions])
@@ -69,8 +69,8 @@ class RegionService:
         sheet = self.answer_sheet_repo.get_by_id(answer_sheet_id)
         if not sheet:
             raise AnswerSheetNotFoundError()
-        exam = self.exam_repo.get_by_id(sheet.exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(sheet.exam_id, member_id)
+        if not exam:
             raise AnswerSheetNotFoundError()
         exam_id = sheet.exam_id
 

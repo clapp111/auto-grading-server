@@ -44,8 +44,8 @@ class ResultService:
         self.model_answer_repo = model_answer_repo
 
     def _get_exam_or_raise(self, exam_id: int, member_id: int):
-        exam = self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.exam_repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         return exam
 

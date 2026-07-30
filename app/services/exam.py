@@ -68,22 +68,23 @@ class ExamService:
         return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def get_exam(self, exam_id: int, member_id: int) -> ExamResponse:
-        exam = self.repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def update_exam(self, exam_id: int, member_id: int, request: ExamUpdateRequest) -> ExamResponse:
-        exam = self.repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         updates = request.model_dump(exclude_unset=True)
         exam = self.repo.update(exam, **updates)
         return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
 
     def delete_exam(self, exam_id: int, member_id: int) -> None:
-        exam = self.repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        # 시험 삭제는 참여자에게 허용하지 않는다.
+        exam = self.repo.get_owned(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
 
         s3_keys = self.repo.get_answer_sheet_file_keys(exam_id)
@@ -98,8 +99,8 @@ class ExamService:
             self.storage.delete(key)
 
     def advance_step(self, exam_id: int, member_id: int, from_step: int) -> ExamResponse:
-        exam = self.repo.get_by_id(exam_id)
-        if not exam or exam.member_id != member_id:
+        exam = self.repo.get_accessible(exam_id, member_id)
+        if not exam:
             raise ExamNotFoundError()
         if exam.step < from_step:
             raise ExamStepConflictError()
