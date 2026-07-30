@@ -18,6 +18,16 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _is_naive_timestamp(table_name: str, column_name: str) -> bool:
+    """Return whether a PostgreSQL timestamp column still lacks timezone data."""
+    column = next(
+        column
+        for column in sa.inspect(op.get_bind()).get_columns(table_name)
+        if column["name"] == column_name
+    )
+    return isinstance(column["type"], sa.DateTime) and not column["type"].timezone
+
+
 def upgrade() -> None:
     op.alter_column(
         "exam",
@@ -25,12 +35,15 @@ def upgrade() -> None:
         type_=sa.DateTime(timezone=True),
         postgresql_using="created_at AT TIME ZONE 'UTC'",
     )
-    op.alter_column(
-        "exam",
-        "updated_at",
-        type_=sa.DateTime(timezone=True),
-        postgresql_using="updated_at AT TIME ZONE 'UTC'",
-    )
+    # Existing databases reached this revision with a naive timestamp. Fresh
+    # installations receive timestamptz from revision 529137af94fc directly.
+    if _is_naive_timestamp("exam", "updated_at"):
+        op.alter_column(
+            "exam",
+            "updated_at",
+            type_=sa.DateTime(timezone=True),
+            postgresql_using="updated_at AT TIME ZONE 'UTC'",
+        )
 
     op.alter_column(
         "job",
@@ -65,12 +78,8 @@ def downgrade() -> None:
         type_=sa.DateTime(),
         postgresql_using="created_at AT TIME ZONE 'UTC'",
     )
-    op.alter_column(
-        "exam",
-        "updated_at",
-        type_=sa.DateTime(),
-        postgresql_using="updated_at AT TIME ZONE 'UTC'",
-    )
+    # Revision 529137af94fc defines this column as timestamptz, so preserve
+    # that type when downgrading only this conversion revision.
 
     op.alter_column(
         "job",
