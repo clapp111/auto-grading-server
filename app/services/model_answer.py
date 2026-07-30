@@ -13,7 +13,11 @@ from app.repositories.job import JobRepository
 from app.repositories.model_answer import ModelAnswerRepository
 from app.repositories.problem import ProblemRepository
 from app.schemas.job import JobStartedResponse
-from app.schemas.model_answer import ModelAnswerOcrRequest, ModelAnswerResponse, ModelAnswerUpdateRequest
+from app.schemas.model_answer import (
+    ModelAnswerOcrRequest,
+    ModelAnswerResponse,
+    ModelAnswerUpdateRequest,
+)
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 
 
@@ -32,25 +36,54 @@ class ModelAnswerService:
         self.job_repo = job_repo
         self.storage = storage
 
-    def _get_problem_or_raise(self, problem_id: int, member_id: int) -> Problem:
-        problem = self.problem_repo.get_by_id(problem_id)
-        if not problem:
-            raise ProblemNotFoundError()
-        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
-        if not exam:
-            raise ProblemNotFoundError()
-        return problem
+    # ===========================================================================
+    # ============================= 주요 서비스 기능 =============================
+    # ===========================================================================
 
-    def issue_model_answer_url(self, exam_id: int, member_id: int, request: PresignedUrlRequest) -> PresignedUrlResponse:
+    def issue_model_answer_url(
+        self, exam_id: int, member_id: int, request: PresignedUrlRequest
+    ) -> PresignedUrlResponse:
+        """모범답안 파일 업로드용 presigned URL을 발급하고 file key를 저장한다.
+
+        Args:
+            exam_id: 모범답안을 올릴 시험 ID
+            member_id: 요청한 사용자 ID
+            request: 파일명과 content type
+
+        Returns:
+            업로드 URL과 저장된 file key
+
+        Raises:
+            ExamNotFoundError: 시험이 없거나 접근 권한이 없는 경우
+        """
         exam = self.exam_repo.get_accessible(exam_id, member_id)
         if not exam:
             raise ExamNotFoundError()
-        file_key = self.storage.generate_key(f"exams/{exam_id}/model-answer", request.file_name)
+        file_key = self.storage.generate_key(
+            f"exams/{exam_id}/model-answer", request.file_name
+        )
         self.exam_repo.update(exam, model_answer_file_key=file_key)
         upload_url = self.storage.generate_presigned_url(file_key, request.content_type)
         return PresignedUrlResponse(upload_url=upload_url, file_key=file_key)
 
-    def run_ocr(self, problem_id: int, member_id: int, request: ModelAnswerOcrRequest) -> JobStartedResponse:
+    def run_ocr(
+        self, problem_id: int, member_id: int, request: ModelAnswerOcrRequest
+    ) -> JobStartedResponse:
+        """모범답안 영역 OCR 잡을 생성해 비동기로 실행한다.
+
+        요청에 언어가 있으면 문제의 언어를 갱신하고, 모범답안 레코드에 OCR 영역을 저장한다.
+
+        Args:
+            problem_id: 대상 문제 ID
+            member_id: 요청한 사용자 ID
+            request: OCR 영역과 (선택) 프로그래밍 언어
+
+        Returns:
+            시작된 잡의 ID와 상태
+
+        Raises:
+            ProblemNotFoundError: 문제가 없거나 접근 권한이 없는 경우
+        """
         from app.workers.ocr_tasks import run_model_answer_ocr
 
         problem = self._get_problem_or_raise(problem_id, member_id)
@@ -69,14 +102,33 @@ class ModelAnswerService:
             problem_id=problem_id,
             input_json={
                 "scope": {"problemIds": [problem_id]},
-                "source": {"trigger": "api", "endpoint": f"/api/v1/problems/{problem_id}/model-answer/ocr"},
+                "source": {
+                    "trigger": "api",
+                    "endpoint": f"/api/v1/problems/{problem_id}/model-answer/ocr",
+                },
             },
         )
         run_model_answer_ocr.delay(job.job_id)
         self.exam_repo.touch(exam_id)
         return JobStartedResponse(job_id=job.job_id, status=job.status)
 
-    def list_model_answers(self, exam_id: int, member_id: int) -> list[ModelAnswerResponse]:
+    def list_model_answers(
+        self, exam_id: int, member_id: int
+    ) -> list[ModelAnswerResponse]:
+        """시험의 모든 문제에 대한 모범답안 목록을 조회한다.
+
+        모범답안이 아직 없는 문제는 빈 응답(모든 필드 `None`)으로 채워 문제 순서대로 반환한다.
+
+        Args:
+            exam_id: 조회할 시험 ID
+            member_id: 요청한 사용자 ID
+
+        Returns:
+            문제별 모범답안 목록 (미작성 문제 포함)
+
+        Raises:
+            ExamNotFoundError: 시험이 없거나 접근 권한이 없는 경우
+        """
         exam = self.exam_repo.get_accessible(exam_id, member_id)
         if not exam:
             raise ExamNotFoundError()
@@ -89,18 +141,37 @@ class ModelAnswerService:
             if ma:
                 result.append(ModelAnswerResponse.model_validate(ma))
             else:
-                result.append(ModelAnswerResponse(
-                    model_answer_id=None,
-                    problem_id=problem.problem_id,
-                    correct_choice=None,
-                    choice_count=None,
-                    accepted_answers=None,
-                    model_answer_text=None,
-                    region=None,
-                ))
+                result.append(
+                    ModelAnswerResponse(
+                        model_answer_id=None,
+                        problem_id=problem.problem_id,
+                        correct_choice=None,
+                        choice_count=None,
+                        accepted_answers=None,
+                        model_answer_text=None,
+                        region=None,
+                    )
+                )
         return result
 
-    def update_model_answer(self, problem_id: int, member_id: int, request: ModelAnswerUpdateRequest) -> ModelAnswerResponse:
+    def update_model_answer(
+        self, problem_id: int, member_id: int, request: ModelAnswerUpdateRequest
+    ) -> ModelAnswerResponse:
+        """모범답안을 수정한다.
+
+        문제 유형에 따라 반영할 필드가 달라진다(`_build_updates` 참고).
+
+        Args:
+            problem_id: 대상 문제 ID
+            member_id: 요청한 사용자 ID
+            request: 문제 유형별 모범답안 필드
+
+        Returns:
+            수정된 모범답안 정보
+
+        Raises:
+            ProblemNotFoundError: 문제가 없거나 접근 권한이 없는 경우
+        """
         problem = self._get_problem_or_raise(problem_id, member_id)
         exam_id = problem.exam_id
         model_answer = self.model_answer_repo.get_or_create(problem_id)
@@ -109,16 +180,63 @@ class ModelAnswerService:
         self.exam_repo.touch(exam_id)
         return ModelAnswerResponse.model_validate(model_answer)
 
+    # ===========================================================================
+    # ================================ 헬퍼 함수 ================================
+    # ===========================================================================
 
-def _build_updates(problem_type: ProblemType, request: ModelAnswerUpdateRequest) -> dict:
+    def _get_problem_or_raise(self, problem_id: int, member_id: int) -> Problem:
+        """문제를 조회하고, 없거나 접근 권한이 없으면 예외를 던진다.
+
+        Args:
+            problem_id: 조회할 문제 ID
+            member_id: 요청한 사용자 ID
+
+        Returns:
+            접근 가능한 문제
+
+        Raises:
+            ProblemNotFoundError: 문제가 없거나 접근 권한이 없는 경우
+        """
+        problem = self.problem_repo.get_by_id(problem_id)
+        if not problem:
+            raise ProblemNotFoundError()
+        exam = self.exam_repo.get_accessible(problem.exam_id, member_id)
+        if not exam:
+            raise ProblemNotFoundError()
+        return problem
+
+
+def _build_updates(
+    problem_type: ProblemType, request: ModelAnswerUpdateRequest
+) -> dict:
+    """문제 유형별로 모범답안 갱신 필드를 추린다.
+
+    객관식은 정답 선택지·선택지 수, 단답형은 허용 답안, 서술형·코딩은 모범답안 텍스트와
+    영역만 반영한다. 미전송(`None`) 필드는 제외한다.
+
+    Args:
+        problem_type: 대상 문제 유형
+        request: 모범답안 수정 요청
+
+    Returns:
+        유형에 맞게 추려진 갱신 필드 딕셔너리
+    """
     if problem_type == ProblemType.MULTIPLE_CHOICE:
-        return {k: v for k, v in {
-            "correct_choice": request.correct_choice,
-            "choice_count": request.choice_count,
-        }.items() if v is not None}
+        return {
+            k: v
+            for k, v in {
+                "correct_choice": request.correct_choice,
+                "choice_count": request.choice_count,
+            }.items()
+            if v is not None
+        }
 
     if problem_type == ProblemType.SHORT_ANSWER:
-        return {"accepted_answers": request.accepted_answers} if request.accepted_answers is not None else {}
+        return (
+            {"accepted_answers": request.accepted_answers}
+            if request.accepted_answers is not None
+            else {}
+        )
 
     if problem_type in (ProblemType.DESCRIPTIVE, ProblemType.CODING):
         updates = {}

@@ -17,7 +17,10 @@ class AnswerSheetRepository:
     def list_unmatched_by_exam(self, exam_id: int) -> list[AnswerSheet]:
         return (
             self.db.query(AnswerSheet)
-            .filter(AnswerSheet.exam_id == exam_id, AnswerSheet.status == SheetStatus.UNMATCHED)
+            .filter(
+                AnswerSheet.exam_id == exam_id,
+                AnswerSheet.status == SheetStatus.UNMATCHED,
+            )
             .all()
         )
 

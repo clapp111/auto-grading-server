@@ -19,11 +19,18 @@ class OcrResultRepository:
     def get_by_id(self, ocr_result_id: int) -> OCRResult | None:
         return self.db.get(OCRResult, ocr_result_id)
 
-    def list_by_student(self, student_id: int, layout_mode: LayoutMode | None = None) -> list[tuple[OCRResult, AnswerRegion]]:
+    def list_by_student(
+        self, student_id: int, layout_mode: LayoutMode | None = None
+    ) -> list[tuple[OCRResult, AnswerRegion]]:
         query = (
             self.db.query(OCRResult, AnswerRegion)
-            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
-            .join(AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
+            .join(
+                AnswerRegion,
+                OCRResult.answer_region_id == AnswerRegion.answer_region_id,
+            )
+            .join(
+                AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id
+            )
             .join(Problem, AnswerRegion.problem_id == Problem.problem_id)
             .filter(
                 AnswerSheet.student_id == student_id,
@@ -35,10 +42,15 @@ class OcrResultRepository:
             query = query.filter(AnswerRegion.layout_mode == layout_mode)
         return query.all()
 
-    def count_by_answer_sheet(self, answer_sheet_id: int, layout_mode: LayoutMode | None = None) -> tuple[int, int]:
+    def count_by_answer_sheet(
+        self, answer_sheet_id: int, layout_mode: LayoutMode | None = None
+    ) -> tuple[int, int]:
         base = (
             self.db.query(OCRResult)
-            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
+            .join(
+                AnswerRegion,
+                OCRResult.answer_region_id == AnswerRegion.answer_region_id,
+            )
             .filter(AnswerRegion.answer_sheet_id == answer_sheet_id)
         )
         if layout_mode is not None:
@@ -58,9 +70,19 @@ class OcrResultRepository:
             self.db.query(
                 AnswerRegion.answer_sheet_id,
                 func.count(OCRResult.ocr_result_id),
-                func.count(case((OCRResult.status == OCRStatus.REVIEWED, OCRResult.ocr_result_id))),
+                func.count(
+                    case(
+                        (
+                            OCRResult.status == OCRStatus.REVIEWED,
+                            OCRResult.ocr_result_id,
+                        )
+                    )
+                ),
             )
-            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
+            .join(
+                AnswerRegion,
+                OCRResult.answer_region_id == AnswerRegion.answer_region_id,
+            )
             .filter(AnswerRegion.answer_sheet_id.in_(answer_sheet_ids))
         )
         if layout_mode is not None:
@@ -71,8 +93,13 @@ class OcrResultRepository:
     def map_by_problem(self, problem_id: int) -> dict[int, OCRResult]:
         rows = (
             self.db.query(OCRResult, AnswerSheet.student_id)
-            .join(AnswerRegion, OCRResult.answer_region_id == AnswerRegion.answer_region_id)
-            .join(AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id)
+            .join(
+                AnswerRegion,
+                OCRResult.answer_region_id == AnswerRegion.answer_region_id,
+            )
+            .join(
+                AnswerSheet, AnswerRegion.answer_sheet_id == AnswerSheet.answer_sheet_id
+            )
             .filter(AnswerRegion.problem_id == problem_id)
             .all()
         )

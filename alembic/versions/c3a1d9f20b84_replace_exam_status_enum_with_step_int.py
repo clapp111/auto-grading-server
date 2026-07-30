@@ -5,19 +5,23 @@ Revises: 11d636654806
 Create Date: 2026-06-29 00:00:00.000000
 
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
-revision: str = 'c3a1d9f20b84'
-down_revision: Union[str, None] = '11d636654806'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "c3a1d9f20b84"
+down_revision: str | None = "11d636654806"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column('exam', sa.Column('step', sa.Integer(), nullable=False, server_default='0'))
+    op.add_column(
+        "exam", sa.Column("step", sa.Integer(), nullable=False, server_default="0")
+    )
 
     op.execute("""
         UPDATE exam SET step = CASE status
@@ -30,13 +34,23 @@ def upgrade() -> None:
         END
     """)
 
-    op.drop_column('exam', 'status')
-    op.execute('DROP TYPE IF EXISTS examstatus')
+    op.drop_column("exam", "status")
+    op.execute("DROP TYPE IF EXISTS examstatus")
 
 
 def downgrade() -> None:
-    op.execute("CREATE TYPE examstatus AS ENUM ('DRAFT', 'SETUP', 'OCR', 'GRADING', 'DONE')")
-    op.add_column('exam', sa.Column('status', sa.Enum('DRAFT', 'SETUP', 'OCR', 'GRADING', 'DONE', name='examstatus'), nullable=False, server_default='DRAFT'))
+    op.execute(
+        "CREATE TYPE examstatus AS ENUM ('DRAFT', 'SETUP', 'OCR', 'GRADING', 'DONE')"
+    )
+    op.add_column(
+        "exam",
+        sa.Column(
+            "status",
+            sa.Enum("DRAFT", "SETUP", "OCR", "GRADING", "DONE", name="examstatus"),
+            nullable=False,
+            server_default="DRAFT",
+        ),
+    )
 
     op.execute("""
         UPDATE exam SET status = CASE
@@ -49,4 +63,4 @@ def downgrade() -> None:
         END::examstatus
     """)
 
-    op.drop_column('exam', 'step')
+    op.drop_column("exam", "step")

@@ -35,10 +35,22 @@ class RubricRepository:
 
     def max_order_index(self, problem_id: int) -> int:
         from sqlalchemy import func
-        result = self.db.query(func.max(Rubric.order_index)).filter(Rubric.problem_id == problem_id).scalar()
+
+        result = (
+            self.db.query(func.max(Rubric.order_index))
+            .filter(Rubric.problem_id == problem_id)
+            .scalar()
+        )
         return result if result is not None else -1
 
-    def create(self, problem_id: int, text: str, allocated_score: int, source: RubricSource, order_index: int) -> Rubric:
+    def create(
+        self,
+        problem_id: int,
+        text: str,
+        allocated_score: int,
+        source: RubricSource,
+        order_index: int,
+    ) -> Rubric:
         rubric = Rubric(
             problem_id=problem_id,
             text=text,
@@ -51,7 +63,9 @@ class RubricRepository:
         self.db.refresh(rubric)
         return rubric
 
-    def bulk_create(self, problem_id: int, criteria: list[dict], source: RubricSource) -> list[Rubric]:
+    def bulk_create(
+        self, problem_id: int, criteria: list[dict], source: RubricSource
+    ) -> list[Rubric]:
         rubrics = [
             Rubric(
                 problem_id=problem_id,

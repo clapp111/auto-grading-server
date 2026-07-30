@@ -11,8 +11,22 @@ _PROBLEM_TYPE_LABELS = {
 }
 
 
+# ===========================================================================
+# ============================== 주요 워커 기능 ==============================
+# ===========================================================================
+
+
 @celery_app.task(bind=True, max_retries=3)
 def suggest_rubric_task(self, job_id: int):
+    """LLM으로 채점 루브릭 기준을 추천해 저장한다.
+
+    모범답안 텍스트가 있어야 하며, 기존 LLM 추천 기준만 교체하고 사람이 입력한 HUMAN
+    기준은 유지한다. 기준이 바뀌면 이전 채점이 무의미해지므로 해당 문제의 채점 결과도
+    함께 지운다. 내부 오류가 나면 FAILED로 기록한다(재시도 없음).
+
+    Args:
+        job_id: 처리할 루브릭 추천 잡 ID
+    """
     import app.db.models  # noqa: F401 - 모든 모델을 SQLAlchemy 레지스트리에 등록
     from app.core.config import settings
     from app.db.session import SessionLocal
@@ -29,7 +43,9 @@ def suggest_rubric_task(self, job_id: int):
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
-        job.progress_json = _build_progress(0, 3, "PREPARING", "루브릭 추천을 준비 중입니다.")
+        job.progress_json = _build_progress(
+            0, 3, "PREPARING", "루브릭 추천을 준비 중입니다."
+        )
         db.commit()
 
         problem = db.get(Problem, job.problem_id)
@@ -40,9 +56,13 @@ def suggest_rubric_task(self, job_id: int):
         )
 
         if not model_answer or not model_answer.model_answer_text:
-            raise ValueError("모범답안 텍스트가 없습니다. 먼저 모범답안 OCR을 실행해주세요.")
+            raise ValueError(
+                "모범답안 텍스트가 없습니다. 먼저 모범답안 OCR을 실행해주세요."
+            )
 
-        job.progress_json = _build_progress(1, 3, "ANALYZING", "문제와 모범답안을 분석 중입니다.")
+        job.progress_json = _build_progress(
+            1, 3, "ANALYZING", "문제와 모범답안을 분석 중입니다."
+        )
         db.commit()
 
         criteria = _call_claude_for_rubric(
@@ -54,7 +74,9 @@ def suggest_rubric_task(self, job_id: int):
             model_answer_text=model_answer.model_answer_text,
         )
 
-        job.progress_json = _build_progress(2, 3, "SAVING", "추천 루브릭을 저장하는 중입니다.")
+        job.progress_json = _build_progress(
+            2, 3, "SAVING", "추천 루브릭을 저장하는 중입니다."
+        )
         db.commit()
 
         # 기존 LLM 추천 기준만 교체한다. 사람이 직접 입력한 HUMAN 기준은 유지한다.
@@ -76,9 +98,14 @@ def suggest_rubric_task(self, job_id: int):
         db.add_all(rubrics)
 
         from app.models.grade import Grade
-        db.query(Grade).filter(Grade.problem_id == problem.problem_id).delete(synchronize_session=False)
 
-        job.progress_json = _build_progress(3, 3, "DONE", "루브릭 추천이 완료되었습니다.")
+        db.query(Grade).filter(Grade.problem_id == problem.problem_id).delete(
+            synchronize_session=False
+        )
+
+        job.progress_json = _build_progress(
+            3, 3, "DONE", "루브릭 추천이 완료되었습니다."
+        )
         job.status = JobStatus.DONE
         job.completed_at = datetime.now(timezone.utc)
         job.result_json = {
@@ -87,14 +114,24 @@ def suggest_rubric_task(self, job_id: int):
         }
         db.commit()
 
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+        db.rollback()
         job.status = JobStatus.FAILED
-        job.progress_json = _build_progress(0, 0, "FAILED", "루브릭 추천에 실패했습니다.")
+        job.progress_json = _build_progress(
+            0, 0, "FAILED", "루브릭 추천에 실패했습니다."
+        )
         job.error_json = {"code": "INTERNAL", "message": str(e), "retryable": False}
         db.commit()
 
     finally:
         db.close()
+
+
+# ===========================================================================
+# ================================ 헬퍼 함수 ================================
+# ===========================================================================
 
 
 _RUBRIC_JSON_SCHEMA = {
@@ -107,7 +144,10 @@ _RUBRIC_JSON_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "text": {"type": "string", "description": "채점 기준 내용"},
-                    "allocated_score": {"type": "integer", "description": "해당 기준 배점"},
+                    "allocated_score": {
+                        "type": "integer",
+                        "description": "해당 기준 배점",
+                    },
                 },
                 "required": ["text", "allocated_score"],
                 "additionalProperties": False,
@@ -127,13 +167,34 @@ def _call_claude_for_rubric(
     model_answer_text: str,
     problem_text: str | None = None,
 ) -> list[dict]:
+    """Claude API를 호출해 문제·모범답안 기반 채점 기준 목록을 생성한다.
+
+    배점 합이 총 배점과 일치하도록 JSON 스키마를 강제하고, 3~5개의 한국어 기준을 받는다.
+
+    Args:
+        api_key: Anthropic API 키
+        label: 문제 번호(라벨)
+        problem_type: 문제 유형 코드 (예: DESCRIPTIVE)
+        max_score: 문제 총 배점
+        model_answer_text: 모범답안 텍스트
+        problem_text: 문제 본문 (없으면 `None`)
+
+    Returns:
+        text·allocated_score를 담은 채점 기준 딕셔너리 목록
+
+    Raises:
+        ValueError: Claude 응답에서 채점 기준을 받지 못한 경우
+    """
     import json
+
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
     type_label = _PROBLEM_TYPE_LABELS.get(problem_type, problem_type)
 
-    problem_section = f"문제 내용:\n{problem_text}" if problem_text else "문제 내용: (없음)"
+    problem_section = (
+        f"문제 내용:\n{problem_text}" if problem_text else "문제 내용: (없음)"
+    )
 
     prompt = f"""아래 문제와 모범답안을 분석하여 채점 루브릭 기준들을 생성해주세요.
 

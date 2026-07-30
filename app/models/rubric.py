@@ -1,4 +1,5 @@
-from sqlalchemy import BigInteger, Enum as SAEnum, ForeignKey, Integer, Text
+from sqlalchemy import BigInteger, ForeignKey, Integer, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -8,8 +9,12 @@ from app.enums.rubric_source import RubricSource
 class Rubric(Base):
     __tablename__ = "rubric"
 
-    rubric_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    problem_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("problem.problem_id", ondelete="CASCADE"), nullable=False)
+    rubric_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    problem_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("problem.problem_id", ondelete="CASCADE"), nullable=False
+    )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     allocated_score: Mapped[int] = mapped_column(Integer, nullable=False)
     source: Mapped[RubricSource] = mapped_column(SAEnum(RubricSource), nullable=False)

@@ -3,9 +3,22 @@ from datetime import datetime, timezone
 from app.workers.tasks import celery_app
 from app.workers.utils import _build_progress
 
+# ===========================================================================
+# ============================== 주요 워커 기능 ==============================
+# ===========================================================================
+
 
 @celery_app.task(bind=True, max_retries=3)
 def apply_region_template(self, job_id: int):
+    """영역 템플릿을 첫 답안지에서 나머지 답안지로 복제한다.
+
+    가장 앞선 답안지를 템플릿으로 삼아, 나머지 답안지의 기존 영역을 지우고 같은 레이아웃
+    모드의 영역을 복제한다. 잡을 RUNNING으로 전환하고 진행률을 갱신하며, 완료 시 DONE으로
+    마감한다. 내부 오류가 나면 FAILED로 기록한다(재시도 없음).
+
+    Args:
+        job_id: 처리할 템플릿 적용 잡 ID
+    """
     import app.db.models  # noqa: F401
     from app.db.session import SessionLocal
     from app.enums.job_status import JobStatus
@@ -20,7 +33,9 @@ def apply_region_template(self, job_id: int):
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
-        job.progress_json = _build_progress(0, 0, "PREPARING", "템플릿 적용을 준비 중입니다.")
+        job.progress_json = _build_progress(
+            0, 0, "PREPARING", "템플릿 적용을 준비 중입니다."
+        )
         db.commit()
 
         exam = db.get(Exam, job.exam_id)
@@ -59,7 +74,9 @@ def apply_region_template(self, job_id: int):
             for r in template_regions
         ]
 
-        job.progress_json = _build_progress(0, total, "APPLYING", f"0/{total} 답안지에 템플릿을 적용 중입니다.")
+        job.progress_json = _build_progress(
+            0, total, "APPLYING", f"0/{total} 답안지에 템플릿을 적용 중입니다."
+        )
         db.commit()
 
         for index, sheet in enumerate(target_sheets, start=1):
@@ -69,28 +86,41 @@ def apply_region_template(self, job_id: int):
             ).delete()
 
             for tmpl in template_data:
-                db.add(AnswerRegion(
-                    answer_sheet_id=sheet.answer_sheet_id,
-                    **tmpl,
-                ))
+                db.add(
+                    AnswerRegion(
+                        answer_sheet_id=sheet.answer_sheet_id,
+                        **tmpl,
+                    )
+                )
 
-            if index % max(1, total // 10) == 0 or index == total:
-                job.progress_json = _build_progress(index, total, "APPLYING", f"{index}/{total} 답안지에 템플릿을 적용 중입니다.")
-
-            db.commit()
+            if index % max(1, (total + 9) // 10) == 0 or index == total:
+                job.progress_json = _build_progress(
+                    index,
+                    total,
+                    "APPLYING",
+                    f"{index}/{total} 답안지에 템플릿을 적용 중입니다.",
+                )
+                db.commit()
 
         job.status = JobStatus.DONE
         job.completed_at = datetime.now(timezone.utc)
-        job.progress_json = _build_progress(total, total, "DONE", "템플릿 적용이 완료되었습니다.")
+        job.progress_json = _build_progress(
+            total, total, "DONE", "템플릿 적용이 완료되었습니다."
+        )
         job.result_json = {
             "summary": {"processed": total, "succeeded": total, "failed": 0},
             "resultRef": {"type": "answer_regions", "examId": exam.exam_id},
         }
         db.commit()
 
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+        db.rollback()
         job.status = JobStatus.FAILED
-        job.progress_json = _build_progress(0, 0, "FAILED", "템플릿 적용에 실패했습니다.")
+        job.progress_json = _build_progress(
+            0, 0, "FAILED", "템플릿 적용에 실패했습니다."
+        )
         job.error_json = {
             "code": "INTERNAL",
             "message": str(e),

@@ -4,20 +4,22 @@
 실행 (단위):   pytest tests/test_rubric.py -v
 실행 (통합):   pytest tests/test_rubric.py -v -m integration
 """
+
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from app.workers.rubric_tasks import _call_claude_for_rubric
-
 
 # ── Mock 데이터 ─────────────────────────────────────────────────
 
@@ -39,6 +41,7 @@ MOCK_CRITERIA = [
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────
 
+
 def make_mock_stream(criteria: list[dict]) -> MagicMock:
     text_block = MagicMock()
     text_block.type = "text"
@@ -57,6 +60,7 @@ def make_mock_stream(criteria: list[dict]) -> MagicMock:
 
 # ── 단위 테스트 ───────────────────────────────────────────────────
 
+
 class TestCallClaudeForRubric:
     @pytest.fixture
     def mock_client(self):
@@ -67,13 +71,17 @@ class TestCallClaudeForRubric:
             yield client
 
     def test_returns_criteria_list(self, mock_client):
-        result = _call_claude_for_rubric(API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT)
+        result = _call_claude_for_rubric(
+            API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT
+        )
 
         assert isinstance(result, list)
         assert len(result) == len(MOCK_CRITERIA)
 
     def test_criteria_have_required_fields(self, mock_client):
-        result = _call_claude_for_rubric(API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT)
+        result = _call_claude_for_rubric(
+            API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT
+        )
 
         for c in result:
             assert "text" in c
@@ -82,7 +90,9 @@ class TestCallClaudeForRubric:
             assert isinstance(c["allocated_score"], int)
 
     def test_prompt_includes_label_and_score(self, mock_client):
-        _call_claude_for_rubric(API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT)
+        _call_claude_for_rubric(
+            API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT
+        )
 
         _, kwargs = mock_client.messages.stream.call_args
         prompt = kwargs["messages"][0]["content"]
@@ -90,7 +100,9 @@ class TestCallClaudeForRubric:
         assert str(MAX_SCORE) in prompt
 
     def test_prompt_includes_model_answer(self, mock_client):
-        _call_claude_for_rubric(API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT)
+        _call_claude_for_rubric(
+            API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT
+        )
 
         _, kwargs = mock_client.messages.stream.call_args
         prompt = kwargs["messages"][0]["content"]
@@ -112,10 +124,13 @@ class TestCallClaudeForRubric:
             MockAnthropic.return_value.messages.stream.return_value = stream
 
             with pytest.raises(ValueError, match="루브릭 기준을 받지 못했습니다"):
-                _call_claude_for_rubric(API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT)
+                _call_claude_for_rubric(
+                    API_KEY, LABEL, PROBLEM_TYPE, MAX_SCORE, MODEL_ANSWER_TEXT
+                )
 
 
 # ── 통합 테스트 (실제 Claude API 호출) ──────────────────────────────
+
 
 @pytest.mark.integration
 class TestCallClaudeForRubricIntegration:

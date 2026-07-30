@@ -1,8 +1,8 @@
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.enums.grade_status import GradeStatus
 from app.enums.grade_method import GradeMethod
+from app.enums.grade_status import GradeStatus
 from app.models.grade import Grade
 from app.models.student import Student
 
@@ -36,7 +36,9 @@ class GradeRepository:
             self.db.query(
                 Grade.problem_id,
                 func.count(Grade.grade_id),
-                func.count(case((Grade.status == GradeStatus.CONFIRMED, Grade.grade_id))),
+                func.count(
+                    case((Grade.status == GradeStatus.CONFIRMED, Grade.grade_id))
+                ),
             )
             .filter(Grade.problem_id.in_(problem_ids))
             .group_by(Grade.problem_id)
@@ -76,13 +78,17 @@ class GradeRepository:
     def confirm_all(self, problem_id: int) -> int:
         count = (
             self.db.query(Grade)
-            .filter(Grade.problem_id == problem_id, Grade.status == GradeStatus.SUGGESTED)
+            .filter(
+                Grade.problem_id == problem_id, Grade.status == GradeStatus.SUGGESTED
+            )
             .update({"status": GradeStatus.CONFIRMED}, synchronize_session=False)
         )
         self.db.commit()
         return count
 
-    def get_by_problem_and_student(self, problem_id: int, student_id: int) -> Grade | None:
+    def get_by_problem_and_student(
+        self, problem_id: int, student_id: int
+    ) -> Grade | None:
         return (
             self.db.query(Grade)
             .filter(Grade.problem_id == problem_id, Grade.student_id == student_id)
@@ -90,5 +96,7 @@ class GradeRepository:
         )
 
     def delete_by_problem(self, problem_id: int) -> None:
-        self.db.query(Grade).filter(Grade.problem_id == problem_id).delete(synchronize_session=False)
+        self.db.query(Grade).filter(Grade.problem_id == problem_id).delete(
+            synchronize_session=False
+        )
         self.db.commit()

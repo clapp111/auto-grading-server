@@ -4,25 +4,27 @@ DB / Celery 없이 Mock으로 서비스 레이어를 검증합니다.
 
 실행: pytest tests/test_answer_sheet_id_region.py -v
 """
-import sys
+
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.enums.job_status import JobStatus
 from app.enums.job_type import JobType
 from app.enums.sheet_status import SheetStatus
-from app.schemas.answer_sheet import IdRegionSaveRequest, AnswerSheetPatchRequest
+from app.schemas.answer_sheet import AnswerSheetPatchRequest, IdRegionSaveRequest
 from app.schemas.common import Region
 from app.schemas.s3 import PresignedUrlRequest
 from app.services.answer_sheet import AnswerSheetService
-
 
 # ── Mock 데이터 ─────────────────────────────────────────────────
 
@@ -40,6 +42,7 @@ UPLOAD_URL = "https://s3.amazonaws.com/bucket/presigned-put?X-Amz-Signature=stub
 
 
 # ── Fixtures ─────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_exam():
@@ -73,16 +76,15 @@ def mock_job():
 
 @pytest.fixture
 def service_with_mocks(mock_exam, mock_sheet, mock_job):
-    answer_region_repo = MagicMock()
+    db = MagicMock()
     answer_sheet_repo = MagicMock()
-    ocr_result_repo = MagicMock()
-    grade_repo = MagicMock()
     student_repo = MagicMock()
     exam_repo = MagicMock()
     job_repo = MagicMock()
     storage = MagicMock()
 
     exam_repo.get_by_id.return_value = mock_exam
+    exam_repo.get_accessible.return_value = mock_exam
     answer_sheet_repo.get_by_id.return_value = mock_sheet
     answer_sheet_repo.list_by_exam.return_value = [mock_sheet]
     answer_sheet_repo.create.return_value = mock_sheet
@@ -91,20 +93,16 @@ def service_with_mocks(mock_exam, mock_sheet, mock_job):
     storage.generate_presigned_url.return_value = UPLOAD_URL
 
     svc = AnswerSheetService(
-        answer_region_repo=answer_region_repo,
+        db=db,
         answer_sheet_repo=answer_sheet_repo,
-        ocr_result_repo=ocr_result_repo,
-        grade_repo=grade_repo,
         student_repo=student_repo,
         exam_repo=exam_repo,
         job_repo=job_repo,
         storage=storage,
     )
     mocks = {
-        "answer_region_repo": answer_region_repo,
+        "db": db,
         "answer_sheet_repo": answer_sheet_repo,
-        "ocr_result_repo": ocr_result_repo,
-        "grade_repo": grade_repo,
         "student_repo": student_repo,
         "exam_repo": exam_repo,
         "job_repo": job_repo,
@@ -115,10 +113,13 @@ def service_with_mocks(mock_exam, mock_sheet, mock_job):
 
 # ── 1. 답안지 업로드 URL 발급 ──────────────────────────────────────
 
+
 class TestIssueUploadUrl:
     def test_creates_answer_sheet_record(self, service_with_mocks):
         svc, mocks = service_with_mocks
-        req = PresignedUrlRequest(file_name="홍길동_답안지.pdf", content_type="application/pdf")
+        req = PresignedUrlRequest(
+            file_name="홍길동_답안지.pdf", content_type="application/pdf"
+        )
 
         svc.issue_upload_url(EXAM_ID, MEMBER_ID, req)
 
@@ -127,8 +128,10 @@ class TestIssueUploadUrl:
         )
 
     def test_returns_presigned_url_and_file_key(self, service_with_mocks):
-        svc, mocks = service_with_mocks
-        req = PresignedUrlRequest(file_name="홍길동_답안지.pdf", content_type="application/pdf")
+        svc, _ = service_with_mocks
+        req = PresignedUrlRequest(
+            file_name="홍길동_답안지.pdf", content_type="application/pdf"
+        )
 
         result = svc.issue_upload_url(EXAM_ID, MEMBER_ID, req)
 
@@ -137,6 +140,7 @@ class TestIssueUploadUrl:
 
 
 # ── 2. 식별 영역 저장 및 OCR 작업 시작 ──────────────────────────────
+
 
 class TestSaveIdRegions:
     @pytest.fixture
@@ -159,7 +163,9 @@ class TestSaveIdRegions:
             student_no_region=STUDENT_NO_REGION.model_dump(),
         )
 
-    def test_creates_job_with_answer_sheet_recognize_type(self, service_with_mocks, id_region_req):
+    def test_creates_job_with_answer_sheet_recognize_type(
+        self, service_with_mocks, id_region_req
+    ):
         svc, mocks = service_with_mocks
 
         with patch("app.workers.ocr_tasks.run_student_id_ocr") as mock_task:
@@ -171,8 +177,10 @@ class TestSaveIdRegions:
         assert kwargs["exam_id"] == EXAM_ID
         assert kwargs["requested_by_member_id"] == MEMBER_ID
 
-    def test_dispatches_celery_task_with_job_id(self, service_with_mocks, id_region_req):
-        svc, mocks = service_with_mocks
+    def test_dispatches_celery_task_with_job_id(
+        self, service_with_mocks, id_region_req
+    ):
+        svc, _ = service_with_mocks
 
         with patch("app.workers.ocr_tasks.run_student_id_ocr") as mock_task:
             mock_task.delay.return_value = None
@@ -181,7 +189,7 @@ class TestSaveIdRegions:
         mock_task.delay.assert_called_once_with(JOB_ID)
 
     def test_returns_job_started_response(self, service_with_mocks, id_region_req):
-        svc, mocks = service_with_mocks
+        svc, _ = service_with_mocks
 
         with patch("app.workers.ocr_tasks.run_student_id_ocr") as mock_task:
             mock_task.delay.return_value = None
@@ -192,6 +200,7 @@ class TestSaveIdRegions:
 
 
 # ── 3. 답안지 목록 조회 ──────────────────────────────────────────────
+
 
 class TestListAnswerSheets:
     def test_returns_unmatched_sheets(self, service_with_mocks):
@@ -207,6 +216,7 @@ class TestListAnswerSheets:
 
 
 # ── 4. 답안지 다운로드 URL 조회 ────────────────────────────────────
+
 
 class TestGetDownloadUrl:
     def test_returns_cdn_url(self, service_with_mocks):
@@ -242,24 +252,25 @@ class TestGetDownloadUrl:
 
 # ── 5. 답안지 수동 매칭 (PATCH) ──────────────────────────────────────
 
+
 class TestDeleteAnswerSheet:
-    def test_deletes_related_records_before_sheet_and_student(self, service_with_mocks, mock_sheet):
+    def test_deletes_sheet_and_student_before_committing(
+        self, service_with_mocks, mock_sheet
+    ):
         svc, mocks = service_with_mocks
         student = MagicMock(student_id=50)
         mock_sheet.student = student
         mock_sheet.student_id = student.student_id
-        mocks["student_repo"].count_by_exam.return_value = 0
+        mocks["student_repo"].get_by_id.return_value = student
 
         svc.delete_answer_sheet(ANSWER_SHEET_ID, MEMBER_ID)
 
         mocks["storage"].delete.assert_called_once_with(FILE_KEY)
-        mocks["ocr_result_repo"].delete_all_by_answer_sheet.assert_called_once_with(ANSWER_SHEET_ID, commit=False)
-        mocks["answer_region_repo"].delete_all_by_answer_sheet.assert_called_once_with(ANSWER_SHEET_ID, commit=False)
-        mocks["grade_repo"].delete_all_by_student.assert_called_once_with(student.student_id, commit=False)
-        mocks["answer_sheet_repo"].delete.assert_called_once_with(mock_sheet, commit=False)
+        mocks["answer_sheet_repo"].delete.assert_called_once_with(
+            mock_sheet, commit=False
+        )
         mocks["student_repo"].delete.assert_called_once_with(student, commit=False)
-        mocks["student_repo"].count_by_exam.assert_called_once_with(EXAM_ID)
-        mocks["answer_sheet_repo"].db.commit.assert_called_once()
+        mocks["db"].commit.assert_called_once()
 
 
 class TestPatchAnswerSheet:
@@ -270,7 +281,8 @@ class TestPatchAnswerSheet:
         mocks["student_repo"].create.return_value = new_student
 
         svc.patch_answer_sheet(
-            ANSWER_SHEET_ID, MEMBER_ID,
+            ANSWER_SHEET_ID,
+            MEMBER_ID,
             AnswerSheetPatchRequest(name="홍길동", student_no="20230001"),
         )
 
@@ -284,11 +296,14 @@ class TestPatchAnswerSheet:
         mocks["student_repo"].get_by_exam_and_no.return_value = existing
 
         svc.patch_answer_sheet(
-            ANSWER_SHEET_ID, MEMBER_ID,
+            ANSWER_SHEET_ID,
+            MEMBER_ID,
             AnswerSheetPatchRequest(name="홍길동(수정)", student_no="20230001"),
         )
 
-        mocks["student_repo"].update.assert_called_once_with(existing, name="홍길동(수정)")
+        mocks["student_repo"].update.assert_called_once_with(
+            existing, name="홍길동(수정)"
+        )
         mocks["student_repo"].create.assert_not_called()
 
     def test_sets_sheet_status_to_matched(self, service_with_mocks, mock_sheet):
@@ -298,7 +313,8 @@ class TestPatchAnswerSheet:
         mocks["student_repo"].create.return_value = student
 
         svc.patch_answer_sheet(
-            ANSWER_SHEET_ID, MEMBER_ID,
+            ANSWER_SHEET_ID,
+            MEMBER_ID,
             AnswerSheetPatchRequest(name="홍길동", student_no="20230001"),
         )
 

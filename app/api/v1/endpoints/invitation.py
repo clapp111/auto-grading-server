@@ -23,7 +23,9 @@ async def list_invitations(
     current_member: Member = Depends(get_current_member),
     service: InvitationService = Depends(get_invitation_service),
 ) -> ApiResponse[list[InvitationResponse]]:
-    return ApiResponse(data=service.list_received_invitations(current_member.member_id, status))
+    return ApiResponse(
+        data=service.list_received_invitations(current_member.member_id, status)
+    )
 
 
 @router.post("/{invitation_id}/accept", status_code=204)
@@ -56,33 +58,47 @@ async def cancel_invitation(
     return Response(status_code=204)
 
 
-@exam_router.post("/{exam_id}/invitations", status_code=201, response_model=ApiResponse[ExamInvitationResponse])
+@exam_router.post(
+    "/{exam_id}/invitations",
+    status_code=201,
+    response_model=ApiResponse[ExamInvitationResponse],
+)
 async def create_invitation(
     exam_id: int,
     request: InvitationCreateRequest,
     current_member: Member = Depends(get_current_member),
     service: InvitationService = Depends(get_invitation_service),
 ) -> ApiResponse[ExamInvitationResponse]:
-    return ApiResponse(data=service.create_invitation(exam_id, current_member.member_id, request))
+    return ApiResponse(
+        data=service.create_invitation(exam_id, current_member.member_id, request)
+    )
 
 
-@exam_router.get("/{exam_id}/invitations", response_model=ApiResponse[list[ExamInvitationResponse]])
+@exam_router.get(
+    "/{exam_id}/invitations", response_model=ApiResponse[list[ExamInvitationResponse]]
+)
 async def list_exam_invitations(
     exam_id: int,
     status: InvitationStatus | None = Query(default=None),
     current_member: Member = Depends(get_current_member),
     service: InvitationService = Depends(get_invitation_service),
 ) -> ApiResponse[list[ExamInvitationResponse]]:
-    return ApiResponse(data=service.list_exam_invitations(exam_id, current_member.member_id, status))
+    return ApiResponse(
+        data=service.list_exam_invitations(exam_id, current_member.member_id, status)
+    )
 
 
-@exam_router.get("/{exam_id}/members", response_model=ApiResponse[list[ExamMemberResponse]])
+@exam_router.get(
+    "/{exam_id}/members", response_model=ApiResponse[list[ExamMemberResponse]]
+)
 async def list_exam_members(
     exam_id: int,
     current_member: Member = Depends(get_current_member),
     service: InvitationService = Depends(get_invitation_service),
 ) -> ApiResponse[list[ExamMemberResponse]]:
-    return ApiResponse(data=service.list_exam_members(exam_id, current_member.member_id))
+    return ApiResponse(
+        data=service.list_exam_members(exam_id, current_member.member_id)
+    )
 
 
 @exam_router.delete("/{exam_id}/members/{member_id}", status_code=204)

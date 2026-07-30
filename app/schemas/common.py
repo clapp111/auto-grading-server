@@ -1,4 +1,4 @@
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -6,6 +6,7 @@ T = TypeVar("T")
 
 
 # ── 좌표 / 영역 ────────────────────────────────────────────────
+
 
 class Region(BaseModel):
     page: int
@@ -22,6 +23,7 @@ class Point(BaseModel):
 
 
 # ── 페이지네이션 메타 ───────────────────────────────────────────
+
 
 class PageMeta(BaseModel):
     type: str = Field(default="page")
@@ -42,27 +44,29 @@ class OffsetMeta(BaseModel):
     type: str = Field(default="offset")
     offset: int
     limit: int
-    total: Optional[int] = None
+    total: int | None = None
 
 
 class CursorMeta(BaseModel):
     type: str = Field(default="cursor")
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
     has_more: bool
 
 
 # ── 에러 ───────────────────────────────────────────────────────
 
+
 class ApiError(BaseModel):
     code: str
     message: str
-    field: Optional[str] = None
+    field: str | None = None
 
 
 # ── 공통 응답 래퍼 ─────────────────────────────────────────────
 # Pydantic v2: GenericModel 제거됨 → BaseModel + Generic[T] 직접 상속
 
+
 class ApiResponse(BaseModel, Generic[T]):
-    data: Optional[T] = None
-    meta: Optional[Any] = None
-    error: Optional[ApiError] = None
+    data: T | None = None
+    meta: Any | None = None
+    error: ApiError | None = None

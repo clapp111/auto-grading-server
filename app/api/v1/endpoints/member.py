@@ -3,7 +3,11 @@ from fastapi import APIRouter, Depends
 from app.core.security import get_current_member
 from app.models.member import Member
 from app.schemas.common import ApiResponse
-from app.schemas.member import MemberResponse, UpdatePasswordRequest, UpdateProfileRequest
+from app.schemas.member import (
+    MemberResponse,
+    UpdatePasswordRequest,
+    UpdateProfileRequest,
+)
 from app.schemas.s3 import PresignedUrlRequest, PresignedUrlResponse
 from app.services.member import MemberService, get_member_service
 
@@ -42,4 +46,6 @@ async def get_profile_upload_url(
     current_member: Member = Depends(get_current_member),
     service: MemberService = Depends(get_member_service),
 ) -> ApiResponse[PresignedUrlResponse]:
-    return ApiResponse(data=service.get_profile_upload_url(current_member.member_id, request))
+    return ApiResponse(
+        data=service.get_profile_upload_url(current_member.member_id, request)
+    )
