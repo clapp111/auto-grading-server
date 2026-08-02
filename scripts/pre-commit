@@ -4,13 +4,36 @@
 #  2) 남은 ruff 위반 검사 → 문제 감지 시 커밋 실패
 set -e
 
-files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
-[ -z "$files" ] && exit 0
+# 비정상 종료(set -e로 중단 포함) 시 어느 단계에서 실패했는지 배너로 표시
+trap 'code=$?; if [ "$code" -ne 0 ]; then \
+  echo "=========================================="; \
+  echo "[pre-commit] [FAIL] 검사 실패 (exit $code) — 커밋을 중단합니다."; \
+  echo "=========================================="; \
+fi' EXIT
 
-# 1) 자동수정 단계: 포맷 + fixable 린트 → 재스테이징
+files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+if [ -z "$files" ]; then
+    echo "[pre-commit] 대상 파이썬 파일 없음 — 건너뜀"
+    exit 0
+fi
+
+echo "=========================================="
+echo "[pre-commit] 검사 시작"
+echo "=========================================="
+
+echo ">> [1/3] black 포맷"
 echo "$files" | xargs black
+echo "   [OK] black 포맷 완료"
+
+echo ">> [2/3] ruff 자동수정 (--fix) + 재스테이징"
 echo "$files" | xargs ruff check --fix
 echo "$files" | xargs git add
+echo "   [OK] ruff 자동수정 완료"
 
-# 2) 검사 단계: 자동수정 불가한 위반이 남으면 커밋 중단
+echo ">> [3/3] ruff 린트 검사"
 echo "$files" | xargs ruff check
+echo "   [OK] ruff 린트 통과"
+
+echo "=========================================="
+echo "[pre-commit] [OK] 모든 검사 통과"
+echo "=========================================="
