@@ -72,7 +72,8 @@ class ExamService:
         )
         student_count_map = self.student_repo.count_by_exams([e.exam_id for e in items])
         return [
-            self._to_response(e, student_count_map.get(e.exam_id, 0)) for e in items
+            self._to_response(e, student_count_map.get(e.exam_id, 0), member_id)
+            for e in items
         ], meta
 
     def create_exam(self, member_id: int, request: ExamCreateRequest) -> ExamResponse:
@@ -90,7 +91,9 @@ class ExamService:
             name=request.name,
             description=request.description,
         )
-        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
+        return self._to_response(
+            exam, self.student_repo.count_by_exam(exam.exam_id), member_id
+        )
 
     def get_exam(self, exam_id: int, member_id: int) -> ExamResponse:
         """시험을 단건 조회한다.
@@ -108,7 +111,9 @@ class ExamService:
         exam = self.repo.get_accessible(exam_id, member_id)
         if not exam:
             raise ExamNotFoundError()
-        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
+        return self._to_response(
+            exam, self.student_repo.count_by_exam(exam.exam_id), member_id
+        )
 
     def update_exam(
         self, exam_id: int, member_id: int, request: ExamUpdateRequest
@@ -133,7 +138,9 @@ class ExamService:
             raise ExamNotFoundError()
         updates = request.model_dump(exclude_unset=True)
         exam = self.repo.update(exam, **updates)
-        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
+        return self._to_response(
+            exam, self.student_repo.count_by_exam(exam.exam_id), member_id
+        )
 
     def delete_exam(self, exam_id: int, member_id: int) -> None:
         """시험을 삭제한다.
@@ -189,13 +196,17 @@ class ExamService:
         if exam.step != from_step:
             raise ExamStepConflictError()
         exam = self.repo.update(exam, step=from_step + 1)
-        return self._to_response(exam, self.student_repo.count_by_exam(exam.exam_id))
+        return self._to_response(
+            exam, self.student_repo.count_by_exam(exam.exam_id), member_id
+        )
 
     # ===========================================================================
     # ================================ 헬퍼 함수 ================================
     # ===========================================================================
 
-    def _to_response(self, exam: Exam, student_count: int) -> ExamResponse:
+    def _to_response(
+        self, exam: Exam, student_count: int, member_id: int
+    ) -> ExamResponse:
         """시험 엔티티를 응답 스키마로 변환한다.
 
         저장된 파일 key들을 조회용 URL로 변환하고 학생 수를 포함한다.
@@ -203,12 +214,14 @@ class ExamService:
         Args:
             exam: 변환할 시험
             student_count: 시험에 등록된 학생 수
+            member_id: 현재 요청한 사용자 ID
 
         Returns:
             학생 수와 파일 URL이 포함된 시험 정보
         """
         return ExamResponse(
             exam_id=exam.exam_id,
+            is_owner=exam.member_id == member_id,
             name=exam.name,
             description=exam.description,
             step=exam.step,

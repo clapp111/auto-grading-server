@@ -29,6 +29,7 @@ class ExamAdvanceRequest(BaseModel):
 
 class ExamResponse(BaseModel):
     exam_id: int
+    is_owner: bool
     name: str
     description: str | None
     step: int
