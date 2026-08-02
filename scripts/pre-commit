@@ -1,0 +1,16 @@
+#!/bin/sh
+# 스테이징된 파이썬 파일에 대해:
+#  1) black 포맷 + ruff 자동수정(import 정렬 등) → 자동 재스테이징 (커밋 계속)
+#  2) 남은 ruff 위반 검사 → 문제 감지 시 커밋 실패
+set -e
+
+files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+[ -z "$files" ] && exit 0
+
+# 1) 자동수정 단계: 포맷 + fixable 린트 → 재스테이징
+echo "$files" | xargs black
+echo "$files" | xargs ruff check --fix
+echo "$files" | xargs git add
+
+# 2) 검사 단계: 자동수정 불가한 위반이 남으면 커밋 중단
+echo "$files" | xargs ruff check

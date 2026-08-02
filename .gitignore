@@ -18,12 +18,6 @@ build/
 # Alembic 자동생성 버전 파일은 커밋 O (아래 줄 주석 처리 유지)
 # alembic/versions/
 
-# 로컬 파일 업로드 경로
-uploads/
-docs/
-pages/
-uploads/
-
 # IDE
 .idea/
 .vscode/

@@ -1,0 +1,3 @@
+# 셸 스크립트·git hook은 항상 LF로 유지 (Windows CRLF 변환 시 sh 실행 실패 방지)
+scripts/pre-commit text eol=lf
+*.sh text eol=lf

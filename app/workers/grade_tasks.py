@@ -155,6 +155,7 @@ def run_llm_grade(self, job_id: int):
         grade_results: dict[int, dict] = {}
         grade_errors: dict[int, str] = {}
         pending_retry: Exception | None = None
+        progress_interval = max(1, (total + 9) // 10)
 
         def _grade_one(t: dict) -> tuple[int, dict]:
             result = _call_claude_for_grade(
@@ -181,18 +182,17 @@ def run_llm_grade(self, job_id: int):
                 except (anthropic.APIConnectionError, anthropic.RateLimitError) as e:
                     if pending_retry is None:
                         pending_retry = e
-                except (
-                    Exception
-                ) as e:  # noqa: BLE001 - Record an individual grading failure and continue the batch.
+                except Exception as e:  # noqa: BLE001
                     grade_errors[t["student_id"]] = str(e)
 
-                job.progress_json = _build_progress(
-                    completed,
-                    total,
-                    "GRADING",
-                    f"{completed}/{total} 답안을 채점 중입니다.",
-                )
-                db.commit()
+                if completed % progress_interval == 0 or completed == total:
+                    job.progress_json = _build_progress(
+                        completed,
+                        total,
+                        "GRADING",
+                        f"{completed}/{total} 답안을 채점 중입니다.",
+                    )
+                    db.commit()
 
         if pending_retry is not None:
             raise pending_retry
@@ -280,9 +280,7 @@ def run_llm_grade(self, job_id: int):
     except anthropic.RateLimitError as e:
         raise self.retry(exc=e, countdown=30 * (self.request.retries + 1))
 
-    except (
-        Exception
-    ) as e:  # noqa: BLE001 - Persist an unexpected task failure for Celery monitoring.
+    except Exception as e:  # noqa: BLE001
         db.rollback()
         job.status = JobStatus.FAILED
         job.progress_json = _build_progress(0, 0, "FAILED", "LLM 채점에 실패했습니다.")
