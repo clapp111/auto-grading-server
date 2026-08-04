@@ -29,11 +29,3 @@ class ExamInvitationResponse(BaseModel):
     status: InvitationStatus
     created_at: datetime
     responded_at: datetime | None
-
-
-class ExamMemberResponse(BaseModel):
-    member_id: int
-    name: str
-    email: EmailStr
-    is_owner: bool
-    joined_at: datetime | None

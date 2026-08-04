@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from app.enums.layout_mode import LayoutMode
 from app.schemas.common import CursorMeta
@@ -41,3 +41,11 @@ class ExamResponse(BaseModel):
     updated_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class ExamMemberResponse(BaseModel):
+    member_id: int
+    name: str
+    email: EmailStr
+    is_owner: bool
+    joined_at: datetime | None
