@@ -1,17 +1,25 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ExamNotFoundError, ExamStepConflictError
+from app.core.exceptions import (
+    ExamNotFoundError,
+    ExamOwnerRequiredError,
+    ExamStepConflictError,
+    MemberNotFoundError,
+)
 from app.db.session import get_db
 from app.infrastructure.storage.base import StorageClient
 from app.infrastructure.storage.deps import get_storage
 from app.infrastructure.storage.url import get_file_url
 from app.models.exam import Exam
 from app.repositories.exam import ExamRepository
+from app.repositories.exam_member import ExamMemberRepository
+from app.repositories.member import MemberRepository
 from app.repositories.student import StudentRepository
 from app.schemas.exam import (
     ExamCreateRequest,
     ExamCursorMeta,
+    ExamMemberResponse,
     ExamResponse,
     ExamUpdateRequest,
 )
@@ -22,10 +30,14 @@ class ExamService:
         self,
         repo: ExamRepository,
         student_repo: StudentRepository,
+        exam_member_repo: ExamMemberRepository,
+        member_repo: MemberRepository,
         storage: StorageClient,
     ):
         self.repo = repo
         self.student_repo = student_repo
+        self.exam_member_repo = exam_member_repo
+        self.member_repo = member_repo
         self.storage = storage
 
     # ===========================================================================
@@ -200,6 +212,81 @@ class ExamService:
             exam, self.student_repo.count_by_exam(exam.exam_id), member_id
         )
 
+    def list_exam_members(
+        self, exam_id: int, member_id: int
+    ) -> list[ExamMemberResponse]:
+        """시험의 참여자 목록을 소유자를 포함해 조회한다.
+
+        소유자를 목록 맨 앞에 두고, 초대를 수락한 참여자를 이어서 반환한다.
+
+        Args:
+            exam_id: 참여자를 조회할 시험 ID
+            member_id: 조회를 요청한 사용자 ID
+
+        Returns:
+            소유자와 참여자를 포함한 시험 구성원 목록
+
+        Raises:
+            ExamNotFoundError: 시험이 없거나 접근 권한이 없는 경우
+        """
+        exam = self.repo.get_accessible(exam_id, member_id)
+        if not exam:
+            raise ExamNotFoundError()
+
+        owner = self.member_repo.find_by_id(exam.member_id)
+        items = [
+            ExamMemberResponse(
+                member_id=owner.member_id,
+                name=owner.name,
+                email=owner.email,
+                is_owner=True,
+                joined_at=exam.created_at,
+            )
+        ]
+        for exam_member, member in self.exam_member_repo.list_with_member_by_exam(
+            exam_id
+        ):
+            items.append(
+                ExamMemberResponse(
+                    member_id=member.member_id,
+                    name=member.name,
+                    email=member.email,
+                    is_owner=False,
+                    joined_at=exam_member.created_at,
+                )
+            )
+        return items
+
+    def remove_exam_member(
+        self, exam_id: int, target_member_id: int, member_id: int
+    ) -> None:
+        """시험 참여자를 내보내거나 참여자가 스스로 나간다.
+
+        소유자는 임의의 참여자를 내보낼 수 있고, 참여자는 자신만 나갈 수 있다.
+        소유자 자신은 대상이 될 수 없다.
+
+        Args:
+            exam_id: 대상 시험 ID
+            target_member_id: 내보낼(또는 나갈) 참여자 ID
+            member_id: 요청한 사용자 ID
+
+        Raises:
+            ExamNotFoundError: 시험이 없거나 접근 권한이 없는 경우
+            ExamOwnerRequiredError: 남을 내보낼 권한이 없거나 소유자를 대상으로 지정한 경우
+            MemberNotFoundError: 대상이 시험 참여자가 아닌 경우
+        """
+        exam = self.repo.get_accessible(exam_id, member_id)
+        if not exam:
+            raise ExamNotFoundError()
+        # 소유자는 참여자를 내보낼 수 있고, 참여자는 스스로 나갈 수 있다.
+        if exam.member_id != member_id and target_member_id != member_id:
+            raise ExamOwnerRequiredError()
+        if target_member_id == exam.member_id:
+            raise ExamOwnerRequiredError()
+        if not self.exam_member_repo.exists(exam_id, target_member_id):
+            raise MemberNotFoundError()
+        self.exam_member_repo.delete(exam_id, target_member_id)
+
     # ===========================================================================
     # ================================ 헬퍼 함수 ================================
     # ===========================================================================
@@ -238,4 +325,10 @@ def get_exam_service(
     db: Session = Depends(get_db),
     storage: StorageClient = Depends(get_storage),
 ) -> ExamService:
-    return ExamService(ExamRepository(db), StudentRepository(db), storage)
+    return ExamService(
+        ExamRepository(db),
+        StudentRepository(db),
+        ExamMemberRepository(db),
+        MemberRepository(db),
+        storage,
+    )

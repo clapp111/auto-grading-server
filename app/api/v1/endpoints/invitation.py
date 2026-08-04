@@ -7,7 +7,6 @@ from app.models.member import Member
 from app.schemas.common import ApiResponse
 from app.schemas.invitation import (
     ExamInvitationResponse,
-    ExamMemberResponse,
     InvitationCreateRequest,
     InvitationResponse,
 )
@@ -86,27 +85,3 @@ async def list_exam_invitations(
     return ApiResponse(
         data=service.list_exam_invitations(exam_id, current_member.member_id, status)
     )
-
-
-@exam_router.get(
-    "/{exam_id}/members", response_model=ApiResponse[list[ExamMemberResponse]]
-)
-async def list_exam_members(
-    exam_id: int,
-    current_member: Member = Depends(get_current_member),
-    service: InvitationService = Depends(get_invitation_service),
-) -> ApiResponse[list[ExamMemberResponse]]:
-    return ApiResponse(
-        data=service.list_exam_members(exam_id, current_member.member_id)
-    )
-
-
-@exam_router.delete("/{exam_id}/members/{member_id}", status_code=204)
-async def delete_exam_member(
-    exam_id: int,
-    member_id: int,
-    current_member: Member = Depends(get_current_member),
-    service: InvitationService = Depends(get_invitation_service),
-) -> Response:
-    service.remove_exam_member(exam_id, member_id, current_member.member_id)
-    return Response(status_code=204)
