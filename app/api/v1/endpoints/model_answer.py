@@ -16,7 +16,7 @@ router = APIRouter(tags=["model-answer"])
 
 
 @router.post(
-    "/exams/{exam_id}/model-answer",
+    "/exams/{exam_id}/model-answers",
     status_code=201,
     response_model=ApiResponse[PresignedUrlResponse],
 )
@@ -46,7 +46,7 @@ async def list_model_answers(
 
 
 @router.post(
-    "/problems/{problem_id}/model-answer/ocr",
+    "/problems/{problem_id}/model-answers/ocr",
     status_code=202,
     response_model=ApiResponse[JobStartedResponse],
 )
@@ -62,7 +62,7 @@ async def run_model_answer_ocr(
 
 
 @router.put(
-    "/problems/{problem_id}/model-answer",
+    "/problems/{problem_id}/model-answers",
     response_model=ApiResponse[ModelAnswerResponse],
 )
 async def update_model_answer(

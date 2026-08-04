@@ -40,12 +40,16 @@ async def update_password(
     service.update_password(current_member, request)
 
 
-@router.post("/me/profile/upload", response_model=ApiResponse[PresignedUrlResponse])
-async def get_profile_upload_url(
+@router.post(
+    "/me/profile/upload",
+    status_code=201,
+    response_model=ApiResponse[PresignedUrlResponse],
+)
+async def issue_profile_upload_url(
     request: PresignedUrlRequest,
     current_member: Member = Depends(get_current_member),
     service: MemberService = Depends(get_member_service),
 ) -> ApiResponse[PresignedUrlResponse]:
     return ApiResponse(
-        data=service.get_profile_upload_url(current_member.member_id, request)
+        data=service.issue_profile_upload_url(current_member.member_id, request)
     )

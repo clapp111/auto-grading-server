@@ -30,12 +30,6 @@ class IdRegionSaveRequest(BaseModel):
     student_no_region: Region
 
 
-class AnswerSheetPresignedUrlResponse(BaseModel):
-    upload_url: str
-    file_key: str
-    answer_sheet_id: int
-
-
 class UploadCompleteResponse(BaseModel):
     answer_sheet_id: int
     job_id: int | None = None

@@ -66,7 +66,7 @@ class MemberService:
             raise InvalidCurrentPasswordError()
         self.repo.update(member, password=hash_password(request.new_password))
 
-    def get_profile_upload_url(
+    def issue_profile_upload_url(
         self, member_id: int, request: PresignedUrlRequest
     ) -> PresignedUrlResponse:
         """프로필 이미지 업로드용 presigned URL을 발급한다.
