@@ -16,7 +16,7 @@ router = APIRouter(tags=["rubrics"])
 
 
 @router.post(
-    "/problems/{problem_id}/rubric/suggest",
+    "/problems/{problem_id}/rubrics/suggest",
     status_code=202,
     response_model=ApiResponse[JobStartedResponse],
 )
@@ -31,7 +31,7 @@ async def suggest_rubric(
 
 
 @router.get(
-    "/problems/{problem_id}/rubric", response_model=ApiResponse[list[RubricResponse]]
+    "/problems/{problem_id}/rubrics", response_model=ApiResponse[list[RubricResponse]]
 )
 async def get_rubric(
     problem_id: int,
@@ -42,7 +42,7 @@ async def get_rubric(
 
 
 @router.put(
-    "/problems/{problem_id}/rubric", response_model=ApiResponse[list[RubricResponse]]
+    "/problems/{problem_id}/rubrics", response_model=ApiResponse[list[RubricResponse]]
 )
 async def save_rubric(
     problem_id: int,
@@ -56,7 +56,7 @@ async def save_rubric(
 
 
 @router.post(
-    "/problems/{problem_id}/rubric/criteria",
+    "/problems/{problem_id}/rubrics/criteria",
     status_code=201,
     response_model=ApiResponse[RubricResponse],
 )

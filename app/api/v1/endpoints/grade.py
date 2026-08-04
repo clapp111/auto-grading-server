@@ -17,7 +17,7 @@ router = APIRouter(tags=["grades"])
 
 
 @router.get(
-    "/exams/{exam_id}/grading/progress",
+    "/exams/{exam_id}/grades/progress",
     response_model=ApiResponse[GradingProgressResponse],
 )
 async def get_grading_progress(
@@ -31,7 +31,7 @@ async def get_grading_progress(
 
 
 @router.post(
-    "/exams/{exam_id}/problems/{problem_id}/grade/run",
+    "/exams/{exam_id}/problems/{problem_id}/grades/run",
     status_code=202,
     response_model=ApiResponse[JobStartedResponse],
 )
@@ -104,6 +104,7 @@ async def delete_grades(
 
 @router.post(
     "/problems/{problem_id}/students/{student_id}/grades",
+    status_code=201,
     response_model=ApiResponse[GradeResponse],
 )
 async def create_grade(

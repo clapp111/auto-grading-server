@@ -16,13 +16,12 @@ from app.repositories.student import StudentRepository
 from app.schemas.answer_sheet import (
     AnswerSheetDownloadResponse,
     AnswerSheetPatchRequest,
-    AnswerSheetPresignedUrlResponse,
     AnswerSheetResponse,
     IdRegionSaveRequest,
     UploadCompleteResponse,
 )
 from app.schemas.job import JobStartedResponse
-from app.schemas.s3 import PresignedUrlRequest
+from app.schemas.s3 import AnswerSheetPresignedUrlResponse, PresignedUrlRequest
 
 
 class AnswerSheetService:

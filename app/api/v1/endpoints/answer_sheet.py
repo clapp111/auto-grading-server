@@ -5,14 +5,13 @@ from app.models.member import Member
 from app.schemas.answer_sheet import (
     AnswerSheetDownloadResponse,
     AnswerSheetPatchRequest,
-    AnswerSheetPresignedUrlResponse,
     AnswerSheetResponse,
     IdRegionSaveRequest,
     UploadCompleteResponse,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.job import JobStartedResponse
-from app.schemas.s3 import PresignedUrlRequest
+from app.schemas.s3 import AnswerSheetPresignedUrlResponse, PresignedUrlRequest
 from app.services.answer_sheet import AnswerSheetService, get_answer_sheet_service
 
 router = APIRouter(tags=["answer-sheets"])
