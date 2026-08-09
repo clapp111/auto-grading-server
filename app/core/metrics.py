@@ -18,7 +18,8 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 
 def request_path(request: Request) -> str:
     route = request.scope.get("route")
-    return getattr(route, "path", request.url.path)
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else "unmatched"
 
 
 def observe_request(request: Request, status_code: int, started_at: float) -> None:

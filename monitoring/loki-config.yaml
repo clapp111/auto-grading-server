@@ -24,5 +24,18 @@ schema_config:
         prefix: index_
         period: 24h
 
+compactor:
+  # Persist Compactor state with the Loki data volume so pending deletions survive restarts.
+  working_directory: /loki/compactor
+  compaction_interval: 1h
+  apply_retention_interval: 6h
+  retention_enabled: true
+  # Leave a recovery window before permanently deleting expired chunks.
+  retention_delete_delay: 24h
+  # Limit deletion work to one worker to avoid competing with ingestion and queries.
+  retention_delete_worker_count: 1
+  delete_request_store: filesystem
+
 limits_config:
   allow_structured_metadata: false
+  retention_period: 168h

@@ -44,7 +44,7 @@ services:
 
   prometheus:
     container_name: auto-grading-prometheus
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.12.0
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -54,18 +54,16 @@ services:
 
   loki:
     container_name: auto-grading-loki
-    image: grafana/loki:latest
+    image: grafana/loki:3.7.4
     restart: unless-stopped
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/config.yml
+    command: --config.file=/etc/loki/config.yml
     volumes:
       - ./monitoring/loki-config.yaml:/etc/loki/config.yml:ro
       - loki_data:/loki
 
   alloy:
     container_name: auto-grading-alloy
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.18.0
     restart: unless-stopped
     command: run /etc/alloy/config.alloy --server.http.listen-addr=0.0.0.0:12345 --disable-reporting
     volumes:
@@ -77,7 +75,7 @@ services:
 
   grafana:
     container_name: auto-grading-grafana
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.1.0
     restart: unless-stopped
     ports:
       - "3000:3000"
