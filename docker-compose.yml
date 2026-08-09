@@ -1,5 +1,26 @@
 services:
+  app:
+    container_name: auto-grading-app
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/autograding
+      SECRET_KEY: ${SECRET_KEY:-local-development-secret}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      STORAGE_BACKEND: local
+      APP_BASE_URL: http://localhost:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   db:
+    container_name: auto-grading-db
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
@@ -16,9 +37,64 @@ services:
       retries: 5
 
   redis:
+    container_name: auto-grading-redis
     image: redis:7-alpine
     ports:
       - "6379:6379"
 
+  prometheus:
+    container_name: auto-grading-prometheus
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  loki:
+    container_name: auto-grading-loki
+    image: grafana/loki:latest
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+
+  alloy:
+    container_name: auto-grading-alloy
+    image: grafana/alloy:latest
+    restart: unless-stopped
+    command: run /etc/alloy/config.alloy --server.http.listen-addr=0.0.0.0:12345 --disable-reporting
+    volumes:
+      - ./monitoring/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+
+  grafana:
+    container_name: auto-grading-grafana
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
 volumes:
   postgres_data:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  grafana_data:

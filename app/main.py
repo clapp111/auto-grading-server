@@ -1,3 +1,6 @@
+import logging
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -29,6 +32,8 @@ from app.core.exceptions import (
     StudentNotFoundError,
     UnauthorizedException,
 )
+from app.core.logging import logger
+from app.core.metrics import metrics_app, observe_request, request_path
 
 app = FastAPI(
     title="AI Assisted Grading API",
@@ -42,6 +47,49 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/metrics", metrics_app)
+
+
+class MetricsAccessLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /metrics" not in record.getMessage()
+
+
+@app.on_event("startup")
+async def configure_access_log_filter() -> None:
+    logging.getLogger("uvicorn.access").addFilter(MetricsAccessLogFilter())
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    started_at = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        observe_request(request, 500, started_at)
+        logger.exception(
+            "Unhandled request error: method=%s path=%s",
+            request.method,
+            request_path(request),
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    path = request_path(request)
+
+    if path.rstrip("/") != "/metrics":
+        observe_request(request, response.status_code, started_at)
+        log = logger.warning if response.status_code >= 400 else logger.info
+        log(
+            "HTTP request: method=%s path=%s status=%s duration_ms=%.2f",
+            request.method,
+            path,
+            response.status_code,
+            elapsed_ms,
+        )
+    return response
+
 
 app.include_router(api_router, prefix="/api/v1")
 

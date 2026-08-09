@@ -19,3 +19,4 @@ Pillow==11.2.1
 anthropic==0.111.0
 requests==2.32.3
 google-cloud-documentai==3.15.0
+prometheus-client==0.23.1
